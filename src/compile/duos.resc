@@ -1,0 +1,6 @@
+ using sysbus
+  mach create "duos"
+  machine LoadPlatformDescription @platforms/boards/stm32f4_discovery.repl
+  sysbus LoadELF @/Users/asif/Downloads/duos25/src/compile/build/final.elf
+  showAnalyzer sysbus.usart2
+  start
