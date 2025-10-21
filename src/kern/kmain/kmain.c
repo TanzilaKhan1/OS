@@ -28,22 +28,43 @@
  * SUCH DAMAGE.
  */
 
-#include <sys_init.h>
 #include <cm4.h>
 #include <kmain.h>
-#include <stdint.h>
-#include <sys_usart.h>
 #include <kstdio.h>
-#include <sys_rtc.h>
 #include <kstring.h>
+#include <stdint.h>
+#include <sys_init.h>
+#include <sys_rtc.h>
+#include <sys_usart.h>
+#include <unistd.h>
+
+extern volatile uint16_t g_current_task_id;
+
 #ifndef DEBUG
 #define DEBUG 1
 #endif
-void kmain(void)
-{
-    __sys_init();
-    while (1)
-    {
-      
-    }
+void kmain(void) {
+  __sys_init();
+  g_current_task_id = 1000;
+
+  kprintf("Task ID set to: %d\r\n", g_current_task_id);
+
+  char msg[] = "Hello from userland via write()\n";
+  write(STDOUT_FILENO, msg, sizeof(msg) - 1U);
+
+  uint32_t t = getSysTickTime();
+  int pid = getpid();
+
+  kprintf("getSysTickTime() returned: %d ms\r\n", t);
+  kprintf("getpid() returned: %d\r\n", pid);
+  kprintf("Current time: %d ms, pid: %d\r\n", t, pid);
+
+  kprintf("Calling yield()...\r\n");
+  yield();
+
+  kprintf("After yield(), calling exit(0)...\r\n");
+  exit(0);
+
+  while (1) {
+  }
 }
