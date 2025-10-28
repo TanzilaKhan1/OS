@@ -37,6 +37,7 @@
 #include <syscall.h>
 #include <syscall_def.h>
 #include <system_config.h>
+#include <schedule.h>
 
 volatile uint16_t g_current_task_id = 0;
 __attribute__((used)) volatile uint16_t *const __g_current_task_id_ref =
@@ -88,9 +89,16 @@ uint32_t syscall_dispatch(uint16_t callno, uint32_t a0, uint32_t a1,
   case SYS_reboot:
     __NVIC_SystemReset();
     return 0U;
-  case SYS__exit:
+  case SYS__exit: {
+    /* Mark current task as terminated */
+    TCB_TypeDef *current = get_current_task();
+    if (current != 0) {
+      current->status = TASK_STATUS_TERMINATED;
+    }
+    /* Trigger PendSV to switch to next task */
     SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
     return 0U;
+  }
   case SYS_getpid:
     return (uint32_t)g_current_task_id;
   case SYS___time:

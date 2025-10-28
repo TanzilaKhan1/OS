@@ -32,6 +32,7 @@
 #include <kmain.h>
 #include <kstdio.h>
 #include <kstring.h>
+#include <schedule.h>
 #include <stdint.h>
 #include <sys_init.h>
 #include <sys_rtc.h>
@@ -43,28 +44,147 @@ extern volatile uint16_t g_current_task_id;
 #ifndef DEBUG
 #define DEBUG 1
 #endif
-void kmain(void) {
-  __sys_init();
-  g_current_task_id = 1000;
 
-  kprintf("Task ID set to: %d\r\n", g_current_task_id);
+/* Test Task 1: Tests write syscall and yield */
+void task1_func(void) {
+  for (uint8_t i = 0; i < 3; i++) {
+    int pid = getpid();
+    uint32_t time = getSysTickTime();
+    kprintf("[Task1] PID=%d, Time=%u ms, Iteration=%d\r\n", pid, time, i);
 
-  char msg[] = "Hello from userland via write()\n";
-  write(STDOUT_FILENO, msg, sizeof(msg) - 1U);
+    char msg[] = "[Task1] Using write() syscall\r\n";
+    write(STDOUT_FILENO, msg, sizeof(msg) - 1U);
 
-  uint32_t t = getSysTickTime();
-  int pid = getpid();
+    /* Voluntarily yield CPU */
+    yield();
+  }
 
-  kprintf("getSysTickTime() returned: %d ms\r\n", t);
-  kprintf("getpid() returned: %d\r\n", pid);
-  kprintf("Current time: %d ms, pid: %d\r\n", t, pid);
-
-  kprintf("Calling yield()...\r\n");
-  yield();
-
-  kprintf("After yield(), calling exit(0)...\r\n");
+  kprintf("[Task1] Exiting...\r\n");
   exit(0);
 
+  /* Should never reach here */
+  while (1)
+    ;
+}
+
+/* Test Task 2: Tests getpid and time syscalls */
+void task2_func(void) {
+  for (uint8_t i = 0; i < 3; i++) {
+    int pid = getpid();
+    uint32_t time = getSysTickTime();
+    kprintf("[Task2] PID=%d, Time=%u ms, Iteration=%d\r\n", pid, time, i);
+
+    /* Let SysTick trigger context switch */
+    ms_delay(15);
+  }
+
+  kprintf("[Task2] Exiting...\r\n");
+  exit(0);
+
+  /* Should never reach here */
+  while (1)
+    ;
+}
+
+/* Test Task 3: Tests all basic syscalls */
+void task3_func(void) {
+  int pid = getpid();
+  uint32_t time = getSysTickTime();
+
+  kprintf("[Task3] Starting - PID=%d, Time=%u ms\r\n", pid, time);
+
+  /* Test write syscall */
+  char msg[] = "[Task3] Testing write syscall\r\n";
+  ssize_t written = write(STDOUT_FILENO, msg, sizeof(msg) - 1U);
+  kprintf("[Task3] Wrote %d bytes\r\n", (int)written);
+
+  /* Test getpid multiple times */
+  for (uint8_t i = 0; i < 2; i++) {
+    pid = getpid();
+    time = getSysTickTime();
+    kprintf("[Task3] PID=%d, Time=%u ms\r\n", pid, time);
+    yield();
+  }
+
+  kprintf("[Task3] All tests completed, exiting...\r\n");
+  exit(0);
+
+  /* Should never reach here */
+  while (1)
+    ;
+}
+
+/* Idle task - runs when all other tasks are terminated */
+void idle_task_func(void) {
+  uint32_t idle_count = 0;
+
+  kprintf("[Idle] Idle task started\r\n");
+
+  while (1) {
+    idle_count++;
+    if ((idle_count % 1000) == 0) {
+      int pid = getpid();
+      uint32_t time = getSysTickTime();
+      kprintf("[Idle] PID=%d, Time=%u ms, Count=%u\r\n", pid, time, idle_count);
+    }
+
+    /* Test reboot after some time (optional) */
+    if (idle_count > 10000) {
+      kprintf("[Idle] System has been running for a while. To test reboot, "
+              "uncomment the next line.\r\n");
+      // reboot();  /* Uncomment to test reboot syscall */
+      idle_count = 0;
+    }
+  }
+}
+
+void kmain(void) {
+  /* Initialize system */
+  __sys_init();
+
+  kprintf("\r\n");
+  kprintf("========================================\r\n");
+  kprintf("  DUOS - Operating System Lab Assignment 02\r\n");
+  kprintf("  System Call and Task Management Demo\r\n");
+  kprintf("========================================\r\n");
+  kprintf("\r\n");
+
+  /* Initialize task management system */
+  task_init();
+  kprintf("[KERN] Task management system initialized\r\n");
+
+  /* Create tasks */
+  uint16_t task1_id = task_create(task1_func, 1);
+  kprintf("[KERN] Created Task1, ID=%d\r\n", task1_id);
+
+  uint16_t task2_id = task_create(task2_func, 1);
+  kprintf("[KERN] Created Task2, ID=%d\r\n", task2_id);
+
+  uint16_t task3_id = task_create(task3_func, 1);
+  kprintf("[KERN] Created Task3, ID=%d\r\n", task3_id);
+
+  uint16_t idle_id = task_create(idle_task_func, 255);
+  kprintf("[KERN] Created Idle task, ID=%d\r\n", idle_id);
+
+  kprintf("\r\n[KERN] Starting task execution...\r\n");
+  kprintf("[KERN] SysTick configured for 10ms context switch interval\r\n");
+  kprintf("\r\n");
+
+  /* Set the processor to use PSP for the first task */
+  TCB_TypeDef *first_task = get_current_task();
+  if (first_task != 0) {
+    __asm volatile("msr psp, %0" : : "r"(first_task->psp));
+    __asm volatile("msr control, %0" : : "r"(0x3)); /* Use PSP, unprivileged */
+    __asm volatile("isb");
+
+    /* Jump to first task */
+    void (*task_entry)(void) =
+        (void (*)(void))((uint32_t *)first_task->psp)[13];
+    task_entry();
+  }
+
+  /* Should never reach here */
+  kprintf("[KERN] ERROR: Returned to kmain!\r\n");
   while (1) {
   }
 }

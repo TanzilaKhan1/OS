@@ -211,4 +211,63 @@ void SVC_Handler_C(uint32_t *stack) {
   stack[0] = rc;
 }
 
-__attribute__((naked)) void PendSV_Stub(void) { __asm volatile("bx lr"); }
+/* Forward declarations for task management */
+extern void task_switch(void);
+extern void *get_current_task(void);
+extern void *get_next_task(void);
+
+/**
+ * PendSV Handler for context switching
+ * This is a naked function that manually saves and restores task contexts
+ */
+__attribute__((naked)) void PendSV_Handler(void) {
+  __asm volatile(
+      /* Disable interrupts */
+      "cpsid i\n"
+
+      /* Save current task context */
+      "mrs r0, psp\n"   /* Get current PSP */
+      "tst lr, #0x10\n" /* Test bit 4 of LR (FPU state) */
+      "it eq\n"
+      "vstmdbeq r0!, {s16-s31}\n" /* Save FPU registers if used */
+
+      "stmdb r0!, {r4-r11}\n" /* Save R4-R11 on task stack */
+
+      /* Get current task TCB */
+      "bl get_current_task\n" /* R0 = current TCB pointer */
+      "cbz r0, pendsv_exit\n" /* If NULL, exit */
+
+      /* Save PSP to current TCB (offset 8 in TCB structure) */
+      "mrs r1, psp\n"
+      "tst lr, #0x10\n"
+      "it eq\n"
+      "vstmdbeq r1!, {s16-s31}\n"
+      "stmdb r1!, {r4-r11}\n"
+      "str r1, [r0, #8]\n" /* Store PSP in TCB->psp */
+
+      /* Call task_switch to update current task */
+      "push {lr}\n"
+      "bl task_switch\n"
+      "pop {lr}\n"
+
+      /* Get next task TCB */
+      "bl get_current_task\n" /* R0 = new current TCB pointer */
+      "cbz r0, pendsv_exit\n" /* If NULL, exit */
+
+      /* Restore PSP from new TCB */
+      "ldr r1, [r0, #8]\n"    /* Load PSP from TCB->psp */
+      "ldmia r1!, {r4-r11}\n" /* Restore R4-R11 */
+      "tst lr, #0x10\n"
+      "it eq\n"
+      "vldmiaeq r1!, {s16-s31}\n" /* Restore FPU registers if used */
+      "msr psp, r1\n"             /* Set new PSP */
+
+      "pendsv_exit:\n"
+      /* Enable interrupts and return */
+      "cpsie i\n"
+      "bx lr\n");
+}
+
+__attribute__((naked)) void PendSV_Stub(void) {
+  __asm volatile("b PendSV_Handler");
+}
