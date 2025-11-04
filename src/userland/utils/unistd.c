@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022
+ * Copyright (c) 2022 
  * Computer Science and Engineering, University of Dhaka
  * Credit: CSE Batch 25 (starter) and Prof. Mosaddek Tushar
  *
@@ -27,44 +27,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-
-#include <syscall_def.h>
+ 
 #include <unistd.h>
+/* Write your highlevel I/O details */
 
-#define SVC_CALL(num, a0, a1, a2, a3)                                          \
-  ({                                                                           \
-    register uint32_t r0 __asm("r0") = (uint32_t)(a0);                         \
-    register uint32_t r1 __asm("r1") = (uint32_t)(a1);                         \
-    register uint32_t r2 __asm("r2") = (uint32_t)(a2);                         \
-    register uint32_t r3 __asm("r3") = (uint32_t)(a3);                         \
-    __asm volatile("svc %[imm]"                                                \
-                   : "+r"(r0)                                                  \
-                   : [imm] "I"(num), "r"(r1), "r"(r2), "r"(r3)                 \
-                   : "memory");                                                \
-    r0;                                                                        \
-  })
-
-ssize_t write(int fd, const void *buf, size_t count) {
-  return (ssize_t)SVC_CALL(SYS_write, fd, buf, count, 0U);
-}
-
-ssize_t read(int fd, void *buf, size_t count) {
-  return (ssize_t)SVC_CALL(SYS_read, fd, buf, count, 0U);
-}
-
-int reboot(void) { return (int)SVC_CALL(SYS_reboot, 0U, 0U, 0U, 0U); }
-
-int getpid(void) { return (int)SVC_CALL(SYS_getpid, 0U, 0U, 0U, 0U); }
-
-void _exit(int status) {
-  (void)status;
-  (void)SVC_CALL(SYS__exit, 0U, 0U, 0U, 0U);
-  while (1) {
-  }
-}
-
-void exit(int status) { _exit(status); }
-
-int yield(void) { return (int)SVC_CALL(SYS_yield, 0U, 0U, 0U, 0U); }
-
-uint32_t getSysTickTime(void) { return SVC_CALL(SYS___time, 0U, 0U, 0U, 0U); }
