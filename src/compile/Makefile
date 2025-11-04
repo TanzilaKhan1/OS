@@ -181,6 +181,7 @@ duos: $(OBJECT)/kmath.o \
 	$(OBJECT)/sys_init.o \
 	$(OBJECT)/unistd.o \
 	$(OBJECT)/times.o \
+	$(OBJECT)/syscall.o \
 	$(OBJECT)/serial_lin.o \
 	$(OBJECT)/UsartRingBuffer.o \
 	$(OBJECT)/debug.o \
@@ -209,6 +210,7 @@ final.elf: $(OBJECT)/kmath.o \
 	$(OBJECT)/sys_init.o \
 	$(OBJECT)/unistd.o \
 	$(OBJECT)/times.o \
+	$(OBJECT)/syscall.o \
 	$(OBJECT)/serial_lin.o \
 	$(OBJECT)/UsartRingBuffer.o \
 	$(OBJECT)/debug.o \

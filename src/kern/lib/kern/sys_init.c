@@ -45,7 +45,6 @@
 #define DEBUG 1
 #endif
 extern UART_HandleTypeDef huart6;
-void display_group_info(void);
 
 void __sys_init(void) {
   __init_sys_clock(); // configure system clock 180 MHz
@@ -74,7 +73,6 @@ void __sys_init(void) {
   kprintf("Time Elapse %d ms\n", __getTime());
   kprintf("*************************************\r\n");
   show_system_info();
-  display_group_info();
 #endif
 }
 
@@ -97,6 +95,7 @@ void display_group_info(void) {
   kprintf("# ");
 
   while (1) {
+    ms_delay(1);
     kprintf("Time Elapse %d ms\n", __getTime());
   }
 }
