@@ -57,8 +57,9 @@ extern "C" {
 #define CoreDebug_BASE (0xE000EDF0UL) /*!< Core Debug Base Address */
 #define SysTick_BASE (SCS_BASE + 0x0010UL) /*!< SysTick Base Address */
 #define NVIC_BASE (SCS_BASE + 0x0100UL)    /*!< NVIC Base Address */
-#define SCB_BASE (SCS_BASE + 0x0D00UL) /*!< System Control Block Base Address  \
-                                        */
+#define SCB_BASE                                                               \
+  (SCS_BASE + 0x0D00UL) /*!< System Control Block Base Address                 \
+                         */
 
 #define SCnSCB                                                                 \
   ((SCnSCB_Type *)SCS_BASE)        /*!< System control Register not in SCB */
@@ -124,8 +125,9 @@ typedef struct __scb_t {
 #define SCB_CPUID_VARIANT_Msk                                                  \
   (0xFUL << SCB_CPUID_VARIANT_Pos) /*!< SCB CPUID: VARIANT Mask */
 
-#define SCB_CPUID_ARCHITECTURE_Pos 16U /*!< SCB CPUID: ARCHITECTURE Position   \
-                                        */
+#define SCB_CPUID_ARCHITECTURE_Pos                                             \
+  16U /*!< SCB CPUID: ARCHITECTURE Position                                    \
+       */
 #define SCB_CPUID_ARCHITECTURE_Msk                                             \
   (0xFUL << SCB_CPUID_ARCHITECTURE_Pos) /*!< SCB CPUID: ARCHITECTURE Mask */
 
@@ -204,8 +206,9 @@ typedef struct __scb_t {
 #define SCB_AIRCR_SYSRESETREQ_Msk                                              \
   (1UL << SCB_AIRCR_SYSRESETREQ_Pos) /*!< SCB AIRCR: SYSRESETREQ Mask */
 
-#define SCB_AIRCR_VECTCLRACTIVE_Pos 1U /*!< SCB AIRCR: VECTCLRACTIVE Position  \
-                                        */
+#define SCB_AIRCR_VECTCLRACTIVE_Pos                                            \
+  1U /*!< SCB AIRCR: VECTCLRACTIVE Position                                    \
+      */
 #define SCB_AIRCR_VECTCLRACTIVE_Msk                                            \
   (1UL << SCB_AIRCR_VECTCLRACTIVE_Pos) /*!< SCB AIRCR: VECTCLRACTIVE Mask */
 
@@ -264,8 +267,9 @@ typedef struct __scb_t {
 #define SCB_SHCSR_MEMFAULTENA_Msk                                              \
   (1UL << SCB_SHCSR_MEMFAULTENA_Pos) /*!< SCB SHCSR: MEMFAULTENA Mask */
 
-#define SCB_SHCSR_SVCALLPENDED_Pos 15U /*!< SCB SHCSR: SVCALLPENDED Position   \
-                                        */
+#define SCB_SHCSR_SVCALLPENDED_Pos                                             \
+  15U /*!< SCB SHCSR: SVCALLPENDED Position                                    \
+       */
 #define SCB_SHCSR_SVCALLPENDED_Msk                                             \
   (1UL << SCB_SHCSR_SVCALLPENDED_Pos) /*!< SCB SHCSR: SVCALLPENDED Mask */
 
@@ -458,8 +462,9 @@ typedef struct __scb_t {
   (1UL << SCB_DFSR_DWTTRAP_Pos) /*!< SCB DFSR: DWTTRAP Mask */
 
 #define SCB_DFSR_BKPT_Pos 1U /*!< SCB DFSR: BKPT Position */
-#define SCB_DFSR_BKPT_Msk (1UL << SCB_DFSR_BKPT_Pos) /*!< SCB DFSR: BKPT Mask  \
-                                                      */
+#define SCB_DFSR_BKPT_Msk                                                      \
+  (1UL << SCB_DFSR_BKPT_Pos) /*!< SCB DFSR: BKPT Mask                          \
+                              */
 
 #define SCB_DFSR_HALTED_Pos 0U /*!< SCB DFSR: HALTED Position */
 #define SCB_DFSR_HALTED_Msk                                                    \
@@ -477,8 +482,9 @@ typedef struct __systick_t {
 } SYSTICK_TypeDef;
 
 /* SysTick Control / Status Register Definitions */
-#define SysTick_CTRL_COUNTFLAG_Pos 16U /*!< SysTick CTRL: COUNTFLAG Position   \
-                                        */
+#define SysTick_CTRL_COUNTFLAG_Pos                                             \
+  16U /*!< SysTick CTRL: COUNTFLAG Position                                    \
+       */
 #define SysTick_CTRL_COUNTFLAG_Msk                                             \
   (1UL << SysTick_CTRL_COUNTFLAG_Pos) /*!< SysTick CTRL: COUNTFLAG Mask */
 
@@ -617,12 +623,14 @@ typedef struct __fpu_t {
   (1UL << FPU_FPDSCR_AHP_Pos) /*!< FPDSCR: AHP bit Mask */
 
 #define FPU_FPDSCR_DN_Pos 25U /*!< FPDSCR: DN bit Position */
-#define FPU_FPDSCR_DN_Msk (1UL << FPU_FPDSCR_DN_Pos) /*!< FPDSCR: DN bit Mask  \
-                                                      */
+#define FPU_FPDSCR_DN_Msk                                                      \
+  (1UL << FPU_FPDSCR_DN_Pos) /*!< FPDSCR: DN bit Mask                          \
+                              */
 
 #define FPU_FPDSCR_FZ_Pos 24U /*!< FPDSCR: FZ bit Position */
-#define FPU_FPDSCR_FZ_Msk (1UL << FPU_FPDSCR_FZ_Pos) /*!< FPDSCR: FZ bit Mask  \
-                                                      */
+#define FPU_FPDSCR_FZ_Msk                                                      \
+  (1UL << FPU_FPDSCR_FZ_Pos) /*!< FPDSCR: FZ bit Mask                          \
+                              */
 
 #define FPU_FPDSCR_RMode_Pos 22U /*!< FPDSCR: RMode bit Position */
 #define FPU_FPDSCR_RMode_Msk                                                   \
@@ -674,8 +682,9 @@ typedef struct __fpu_t {
                                                    bits Mask */
 
 /* Media and FP Feature Register 1 Definitions */
-#define FPU_MVFR1_FP_fused_MAC_Pos 28U /*!< MVFR1: FP fused MAC bits Position  \
-                                        */
+#define FPU_MVFR1_FP_fused_MAC_Pos                                             \
+  28U /*!< MVFR1: FP fused MAC bits Position                                   \
+       */
 #define FPU_MVFR1_FP_fused_MAC_Msk                                             \
   (0xFUL << FPU_MVFR1_FP_fused_MAC_Pos) /*!< MVFR1: FP fused MAC bits Mask */
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 
+ * Copyright (c) 2022
  * Computer Science and Engineering, University of Dhaka
  * Credit: CSE Batch 25 (starter) and Prof. Mosaddek Tushar
  *
@@ -27,14 +27,14 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
- 
+
 #ifndef __KSTDIO_H
 #define __KSTDIO_H
+#include <stddef.h>
 #include <stdint.h>
 #include <types.h>
 
-void kprintf(char*,...); 
-void kscanf(char*,...);
-void putstr(const uint8_t*,size_t);
+void kprintf(char *, ...);
+void kscanf(char *, ...);
+void putstr(const uint8_t *, size_t);
 #endif /* KSTDIO */
-
