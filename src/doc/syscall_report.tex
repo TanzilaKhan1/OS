@@ -1,0 +1,848 @@
+\documentclass[11pt,a4paper]{article}
+
+% ------------------------------------------------
+% CORE LAYOUT & TYPOGRAPHY (publication grade)
+% ------------------------------------------------
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}                          % high-quality Latin Modern
+\usepackage[final]{microtype}                 % protrusion & expansion
+\usepackage{setspace}
+\onehalfspacing                               % comfortable line spacing
+\usepackage{parskip}                          % no paragraph indent, vertical space
+\usepackage{ragged2e}
+\usepackage{enumitem}
+\setlist{itemsep=0.35\baselineskip, topsep=0.35\baselineskip}
+\usepackage{multicol}
+\setlength{\columnsep}{18pt}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{makecell}
+\usepackage{caption}
+\usepackage{xcolor}
+\usepackage{csquotes}
+\usepackage{siunitx}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{hypcap}
+\usepackage{hyperref}
+\usepackage{cleveref}
+
+% ------------------------------------------------
+% TIKZ FOR DIAGRAMS
+% ------------------------------------------------
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit, backgrounds, calc, shadows}
+\tikzset{
+  block/.style={rectangle, draw, fill=blue!10, text width=6em, text centered, rounded corners, minimum height=3em, drop shadow},
+  decision/.style={diamond, draw, fill=green!10, text width=4.5em, text badly centered, inner sep=0pt, drop shadow},
+  line/.style={draw, -Latex, thick},
+  cloud/.style={draw, ellipse, fill=red!10, minimum height=2em, drop shadow},
+  process/.style={rectangle, draw, fill=orange!10, text width=8em, text centered, rounded corners, minimum height=3em, drop shadow},
+  smallblock/.style={rectangle, draw, fill=blue!10, text width=4.5em, text centered, rounded corners, minimum height=2.5em, font=\small},
+}
+
+% ------------------------------------------------
+% ALGORITHMS
+% ------------------------------------------------
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\algrenewcommand\algorithmicrequire{\textbf{Input:}}
+\algrenewcommand\algorithmicensure{\textbf{Output:}}
+\algrenewcommand\algorithmiccomment[1]{\hfill\(\triangleright\)~#1}
+
+% ------------------------------------------------
+% CODE: minted (best for publishing)
+% ------------------------------------------------
+\usepackage[cache=false]{minted}
+\usepackage{fvextra}
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codeframe}{RGB}{225,225,225}
+\setminted{
+  fontsize=\small,
+  baselinestretch=1.1,
+  breaklines,
+  breakanywhere,
+  autogobble,
+  bgcolor=codebg,
+  frame=lines,
+  framerule=0.4pt,
+  framesep=6pt,
+  rulecolor=codeframe,
+  tabsize=2,
+  encoding=utf8,
+  obeytabs=false
+}
+% Language helpers
+\newmintedfile{text}{}
+\newminted{c}{}
+\newminted{asm}{}
+\newminted{text}{}
+
+% ------------------------------------------------
+% HYPERREF
+% ------------------------------------------------
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!50!black,
+  citecolor=blue!50!black,
+  urlcolor=blue!60!black,
+  pdfauthor={Md Sadek Hossain Asif, Tanzila Khan},
+  pdftitle={DUOS Assignment 02 - System Call and Exception Handling Report},
+  pdfsubject={Cortex-M4F SVC-based syscall ABI and exception path},
+  pdfkeywords={DUOS, STM32F446RE, Cortex-M4F, SysTick, PendSV, SVC, system calls}
+}
+\urlstyle{same}
+
+% ------------------------------------------------
+% PAGE STYLE & TITLES
+% ------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\textit{DUOS Assignment 02}}
+\rhead{\thepage}
+\setlength{\headheight}{14pt}
+
+\titleformat{\section}{\large\bfseries}{\thesection.}{0.7em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection.}{0.6em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\itshape}{\thesubsubsection.}{0.6em}{}
+\titlespacing*{\section}{0pt}{0.7\baselineskip}{0.45\baselineskip}
+\titlespacing*{\subsection}{0pt}{0.55\baselineskip}{0.35\baselineskip}
+\titlespacing*{\subsubsection}{0pt}{0.5\baselineskip}{0.3\baselineskip}
+
+\captionsetup{labelfont=bf,font=small,tableposition=top}
+
+% ------------------------------------------------
+% TABLE HELPERS: flexible wrapped columns
+% ------------------------------------------------
+\newcolumntype{L}[1]{>{\RaggedRight\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\Centering\arraybackslash}p{#1}}
+\newcolumntype{R}[1]{>{\RaggedLeft\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\RaggedRight\arraybackslash}X}
+
+% ------------------------------------------------
+% MACROS (kept from your original)
+% ------------------------------------------------
+\newcommand{\file}[1]{\texttt{#1}}
+\newcommand{\reg}[1]{\texttt{#1}}
+
+% ------------------------------------------------
+% TOC DEPTH
+% ------------------------------------------------
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
+
+% ------------------------------------------------
+% SAFETY: avoid overfull/underfull + footnote splits
+% ------------------------------------------------
+\sloppy
+\emergencystretch=3em
+\clubpenalty=10000
+\widowpenalty=10000
+\interfootnotelinepenalty=10000
+\frenchspacing
+
+% ------------------------------------------------
+% TITLE PAGE
+% ------------------------------------------------
+\begin{document}
+
+% Custom title page
+\begin{titlepage}
+  \centering
+  \vspace*{1.5cm}
+  
+  {\Large\textbf{University of Dhaka}}\\[0.3cm]
+  {\large Department of Computer Science and Engineering}\\[2cm]
+  
+  \begin{tikzpicture}
+    \draw[line width=1pt] (0,0) -- (12,0);
+  \end{tikzpicture}\\[0.5cm]
+  
+  {\huge\bfseries DUOS Assignment 02}\\[0.4cm]
+  {\LARGE System Call and Exception Handling Report}\\[0.5cm]
+  
+  \begin{tikzpicture}
+    \draw[line width=1pt] (0,0) -- (12,0);
+  \end{tikzpicture}\\[1cm]
+  
+  {\large\textit{Implementation of SVC-based System Call ABI}}\\
+  {\large\textit{for STM32F446RE Cortex-M4F}}\\[2.5cm]
+  
+  \begin{minipage}{0.45\textwidth}
+    \begin{flushleft}
+      \textbf{\large Submitted By:}\\[0.3cm]
+      Md Sadek Hossain Asif\\
+      Tanzila Khan\\
+      Department of CSE
+    \end{flushleft}
+  \end{minipage}
+  \hfill
+  \begin{minipage}{0.45\textwidth}
+    \begin{flushright}
+      \textbf{\large Submitted To:}\\[0.3cm]
+      Mossaddek Kamal Tushar\\
+      Jargis Ahmed\\
+      Department of CSE
+    \end{flushright}
+  \end{minipage}
+  
+  \vfill
+  
+  {\large \today}
+  
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+
+
+\subsection*{Objectives}
+\begin{itemize}[leftmargin=1.5em]
+  \item Introduce a software interrupt (SVC) driven system call ABI for DUOS on the STM32F446RE (Cortex--M4F).
+  \item Provide the seven mandatory services (\texttt{read}, \texttt{write}, \texttt{time}, \texttt{getpid}, \texttt{yield}, \texttt{reboot}, \texttt{exit}) to userland in a controlled manner.
+  \item Configure SysTick and PendSV to build the scheduling foundation for later assignments.
+  \item Demonstrate the end-to-end request path using a userland demo application and provide memory usage statistics.
+\end{itemize}
+
+
+
+\newpage
+
+\section{Introduction}
+
+\subsection{Background}
+Modern operating systems require a well-defined mechanism to transition between unprivileged user code and privileged kernel services. The ARM Cortex-M4F architecture provides the Supervisor Call (SVC) exception specifically for this purpose, enabling user applications to request kernel services safely without compromising system integrity.
+
+\subsection{System Architecture Overview}
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[node distance=1.5cm]
+  % User Space
+  \node[process] (user) {User Application};
+  \node[process, below=of user] (wrapper) {Syscall Wrappers\\(unistd.c)};
+  
+  % Hardware boundary
+  \draw[thick, dashed] ([xshift=-4cm, yshift=-1cm]wrapper.south) -- ([xshift=4cm, yshift=-1cm]wrapper.south) node[midway, above, fill=white] {Hardware Transition (SVC)};
+  
+  % Kernel Space
+  \node[block, below=2cm of wrapper] (svhandler) {SVCall\\Handler};
+  \node[process, below=of svhandler] (decoder) {SVC\_Handler\_C\\(Decoder)};
+  \node[process, below=of decoder] (dispatcher) {syscall\_dispatch()};
+  
+  % Services
+  \node[smallblock, below left=1.2cm and 1.5cm of dispatcher] (uart) {UART\\Driver};
+  \node[smallblock, below=1.2cm of dispatcher] (systick) {SysTick\\Timer};
+  \node[smallblock, below right=1.2cm and 1.5cm of dispatcher] (system) {System\\Control};
+  
+  % Arrows
+  \draw[line] (user) -- (wrapper);
+  \draw[line] (wrapper) -- node[right] {\texttt{svc \#imm}} (svhandler);
+  \draw[line] (svhandler) -- (decoder);
+  \draw[line] (decoder) -- (dispatcher);
+  \draw[line] (dispatcher) -- (uart);
+  \draw[line] (dispatcher) -- (systick);
+  \draw[line] (dispatcher) -- (system);
+  
+  % Return path
+  \draw[line, dashed, blue] (dispatcher.east) -- ++(1.5,0) |- node[near start, right] {Return} (svhandler.east);
+  
+  % Labels
+  \node[above left=0.2cm and 0.5cm of user, text=blue!70!black] {\textbf{User Space}};
+  \node[below left=0.2cm and 0.5cm of uart, text=red!70!black] {\textbf{Kernel Space}};
+\end{tikzpicture}
+\caption{DUOS System Call Architecture Overview}
+\label{fig:architecture}
+\end{figure}
+
+\subsection{Design Goals}
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Safety:} Enforce privilege separation through hardware exception mechanisms.
+  \item \textbf{Efficiency:} Minimize context switching overhead and maintain deterministic timing.
+  \item \textbf{Compatibility:} Conform to ARM EABI calling conventions for future extensibility.
+  \item \textbf{Clarity:} Maintain clean layering between user wrappers, exception handlers, and kernel services.
+\end{enumerate}
+
+\section{System Call Flow}
+
+\subsection{High-Level Flow}
+Figure~\ref{fig:detailed-flow} and \Cref{alg:svc-path} detail how a user request traverses the system. Each step corresponds to concrete code references in the subsequent sections.
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=1.3cm, every node/.style={font=\small}]
+  % Step 1
+  \node[process, text width=7cm] (step1) {%
+    \textbf{Step 1:} User calls wrapper\\
+    \texttt{write(STDOUT\_FILENO, buf, len)}\\
+    \textit{Location:} \file{userland/utils/unistd.c}
+  };
+  
+  % Step 2
+  \node[process, below=of step1, text width=7cm] (step2) {%
+    \textbf{Step 2:} Load registers \& invoke SVC\\
+    \texttt{r0-r3} $\leftarrow$ arguments\\
+    \texttt{svc \#55} (SYS\_write)
+  };
+  
+  % Step 3
+  \node[block, below=of step2, text width=7cm] (step3) {%
+    \textbf{Step 3:} Hardware exception entry\\
+    CPU $\rightarrow$ Handler Mode (MSP)\\
+    Auto-stack: r0-r3, r12, LR, PC, xPSR
+  };
+  
+  % Step 4
+  \node[process, below=of step3, text width=7cm] (step4) {%
+    \textbf{Step 4:} SVCall\_Handler (ASM)\\
+    Detect stack (MSP/PSP)\\
+    Pass frame pointer to C handler
+  };
+  
+  % Step 5
+  \node[process, below=of step4, text width=7cm] (step5) {%
+    \textbf{Step 5:} SVC\_Handler\_C\\
+    Decode SVC immediate\\
+    Extract arguments from stack
+  };
+  
+  % Step 6
+  \node[process, below=of step5, text width=7cm, fill=green!10] (step6) {%
+    \textbf{Step 6:} syscall\_dispatch()\\
+    Execute kernel service\\
+    \texttt{case SYS\_write: ...}
+  };
+  
+  % Step 7
+  \node[process, below=of step6, text width=7cm] (step7) {%
+    \textbf{Step 7:} Write return to stack\\
+    \texttt{stack[0] = retval}\\
+    Exception return (EXC\_RETURN)
+  };
+  
+  % Step 8
+  \node[process, below=of step7, text width=7cm] (step8) {%
+    \textbf{Step 8:} Hardware exception exit\\
+    Restore context from stack\\
+    Return to Thread Mode with result in r0
+  };
+  
+  % Arrows
+  \draw[line] (step1) -- (step2);
+  \draw[line] (step2) -- (step3);
+  \draw[line] (step3) -- (step4);
+  \draw[line] (step4) -- (step5);
+  \draw[line] (step5) -- (step6);
+  \draw[line] (step6) -- (step7);
+  \draw[line] (step7) -- (step8);
+  
+  % Side annotations
+  \node[right=0.3cm of step1, text width=3cm, align=left, text=blue] {User Space\\(Thread Mode)};
+  \node[right=0.3cm of step3, text width=3cm, align=left, text=red] {Kernel Space\\(Handler Mode)};
+\end{tikzpicture}
+\caption{Detailed System Call Execution Flow}
+\label{fig:detailed-flow}
+\end{figure}
+
+\subsection{Step-by-Step Description}
+\begin{enumerate}[leftmargin=2em,label=\arabic*.]
+  \item User code calls a libc-style wrapper (e.g. \texttt{write()}) in \file{userland/utils/unistd.c}.
+  \item The wrapper populates \reg{r0--r3}, issues \texttt{svc \#imm}, and the core transitions to handler mode.
+  \item \texttt{SVCall\_Handler} in \file{kern/arch/stm32f446re/sys\_lib/stm32\_startup.c} selects the correct stack (MSP/PSP) and branches to the C-level helper with the hardware-stacked frame pointer.
+  \item \texttt{SVC\_Handler\_C} decodes the immediate operand, gathers the arguments, and forwards the call to \texttt{syscall\_dispatch()} in \file{kern/syscall/syscall.c}.
+  \item The dispatcher executes the requested kernel service. UART access is funnelled through \file{kern/arch/stm32f446re/sys\_lib/sys\_usart.c}, timing relies on \file{kern/arch/cm4/systick.c}, and termination/yield manipulates \reg{SCB->ICSR}.
+  \item The dispatcher return value is written back into the stacked \reg{r0}. When the exception unwinds, the user thread sees the correct result and resumes execution in thread mode.
+\end{enumerate}
+
+\subsection{Pseudocode Algorithm}
+\begin{algorithm}[h]
+  \caption{End-to-End SVC Request Path}\label{alg:svc-path}
+  \begin{algorithmic}[1]
+    \Require User wrapper (e.g., \texttt{write()}) with args in \(\texttt{r0..r3}\)
+    \Ensure Result propagated back to user \(\texttt{r0}\)
+    \State \textbf{Userland}: Call wrapper in \file{userland/utils/unistd.c}
+    \State Wrapper issues \texttt{svc \#imm} \Comment{Core enters Handler mode}
+    \State \textbf{SVCall\_Handler} (\file{stm32\_startup.c}): select MSP/PSP, pass stacked frame to C
+    \State \textbf{SVC\_Handler\_C}: decode immediate, extract \(\texttt{a0..a3}\), call \texttt{syscall\_dispatch()}
+    \State \textbf{Dispatcher} (\file{kern/syscall/syscall.c}): execute kernel service
+    \State Write return value to stacked \(\texttt{r0}\); unwind exception to Thread mode
+    \State \Return to user with correct result in \(\texttt{r0}\)
+  \end{algorithmic}
+\end{algorithm}
+
+\subsection{Exception Stack Frame}
+Figure~\ref{fig:stack-frame} illustrates the stack layout during SVC exception handling.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  stackframe/.style={rectangle, draw, fill=yellow!20, minimum width=4cm, minimum height=0.7cm, font=\small},
+  stacklabel/.style={font=\small\ttfamily}
+]
+  % Stack frames
+  \node[stackframe] (xpsr) at (0,0) {xPSR};
+  \node[stackframe] (pc) at (0,-0.7) {PC (Return Address)};
+  \node[stackframe] (lr) at (0,-1.4) {LR};
+  \node[stackframe] (r12) at (0,-2.1) {R12};
+  \node[stackframe] (r3) at (0,-2.8) {R3 (arg3)};
+  \node[stackframe] (r2) at (0,-3.5) {R2 (arg2)};
+  \node[stackframe] (r1) at (0,-4.2) {R1 (arg1)};
+  \node[stackframe] (r0) at (0,-4.9) {R0 (arg0/retval)};
+  
+  % Labels
+  \node[left=0.5cm of xpsr, stacklabel] {[7]};
+  \node[left=0.5cm of pc, stacklabel] {[6]};
+  \node[left=0.5cm of lr, stacklabel] {[5]};
+  \node[left=0.5cm of r12, stacklabel] {[4]};
+  \node[left=0.5cm of r3, stacklabel] {[3]};
+  \node[left=0.5cm of r2, stacklabel] {[2]};
+  \node[left=0.5cm of r1, stacklabel] {[1]};
+  \node[left=0.5cm of r0, stacklabel] {[0]};
+  
+  % Stack pointer
+  \draw[-Latex, thick, red] (3, -4.9) -- (2, -4.9) node[midway, above] {SP};
+  
+  % Growth direction
+  \draw[-Latex, thick, blue] (5, 0.5) -- (5, -5.4) node[midway, right] {Stack Growth};
+  
+  % Annotations
+  \node[right=0.5cm of pc, text width=4cm, align=left, font=\small] {Auto-stacked by\\hardware on\\exception entry};
+  \node[right=0.5cm of r0, text width=4cm, align=left, font=\small, text=red] {Modified by\\kernel for\\return value};
+\end{tikzpicture}
+\caption{Exception Stack Frame Layout (ARMv7-M)}
+\label{fig:stack-frame}
+\end{figure}
+
+\section{Boot and Core Services}
+
+\subsection{System Initialisation}
+\file{kern/lib/kern/sys\_init.c} (\texttt{\_\_sys\_init()}) performs the mandatory hardware bring-up:
+\begin{itemize}[leftmargin=1.5em]
+  \item 180\,MHz system clock, FPU enable, nested interrupt priority grouping.
+  \item 1\,kHz SysTick via \texttt{\_\_SysTick\_init(1000)}.
+  \item USART2 (console) and USART6, ring buffer initialisation, timer configuration.
+  \item Boot banner and system diagnostics in debug builds.
+\end{itemize}
+The demo's \texttt{kmain()} (\file{kern/kmain/kmain.c}) calls \texttt{\_\_sys\_init()}, seeds the global task identifier, and orchestrates syscall probes once userland wrappers become available.
+
+\subsection{SysTick Handler}
+\file{kern/arch/cm4/systick.c} maintains the monotonic millisecond counter used by \texttt{SYS\_\_\_time}:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=1.2cm]
+  \node[cloud] (systick) {SysTick IRQ\\(1 kHz)};
+  \node[process, below=of systick, text width=6cm] (increment) {Increment \texttt{g\_msTick}};
+  \node[decision, below=of increment, aspect=2] (check) {Every\\10 ms?};
+  \node[block, below=of check, text width=5cm] (pendsv) {Set PendSV\\SCB->ICSR |= PENDSVSET};
+  \node[block, right=2cm of check] (continue) {Continue};
+  
+  \draw[line] (systick) -- (increment);
+  \draw[line] (increment) -- (check);
+  \draw[line] (check) -- node[left] {Yes} (pendsv);
+  \draw[line] (check) -- node[above] {No} (continue);
+  \draw[line] (pendsv) -| (continue);
+\end{tikzpicture}
+\caption{SysTick and PendSV Triggering Logic}
+\label{fig:systick-flow}
+\end{figure}
+
+\begin{itemize}[leftmargin=1.5em]
+  \item \texttt{g\_msTick} increments every interrupt, providing \texttt{\_\_getTime()} and utility accessors (seconds, minutes, hours).
+  \item A secondary counter (\texttt{tick10}) triggers PendSV every 10\,ms via \reg{SCB->ICSR |= PENDSVSET}, cementing the scheduling cadence for the forthcoming context switcher.
+  \item The interrupt priority is explicitly lowered (0xFF) to keep SysTick and PendSV preemptible by real-time ISRs.
+\end{itemize}
+
+\section{SVC Entry Path}
+
+\subsection{Vector Table Updates}
+The device vector table in \file{kern/arch/stm32f446re/sys\_lib/stm32\_startup.c} now points the SVCall slot at a custom naked handler and connects PendSV to a stub that currently returns immediately (``bx lr''). This preserves a clean hook for scheduler logic while avoiding the default weak implementations.
+
+\subsection{Assembly Shim}
+The SVCall\_Handler is implemented as a naked function in assembly to efficiently detect which stack pointer was in use and pass it to the C handler.
+
+\vspace{0.3cm}
+\noindent\textbf{File:} \file{kern/arch/stm32f446re/sys\_lib/stm32\_startup.c}
+\begin{minted}[linenos]{asm}
+__attribute__((naked)) void SVCall_Handler(void) {
+  __asm volatile(
+      "tst   lr, #4\n"      // test EXC_RETURN[2]
+      "ite   eq\n"          // if-then-else block
+      "mrseq r0, msp\n"     // if bit 2 == 0: use MSP
+      "mrsne r0, psp\n"     // if bit 2 == 1: use PSP
+      "b     SVC_Handler_C");  // jump to C handler
+}
+\end{minted}
+
+\textbf{Key Implementation Details:}
+\begin{itemize}[leftmargin=1.5em]
+  \item The \texttt{tst lr, \#4} pattern conforms to ARMv7-M exception semantics: bit~2 of the EXC\_RETURN value identifies whether the interrupted context used MSP (0) or PSP (1).
+  \item The \texttt{ite} instruction creates a conditional execution block, allowing both stack selection paths to be handled efficiently.
+  \item Passing the stacked frame pointer in r0 to \texttt{SVC\_Handler\_C} avoids memory copying and simplifies return value handling.
+  \item The naked attribute prevents the compiler from generating prologue/epilogue code that would interfere with the exception return mechanism.
+\end{itemize}
+
+\subsection{C-Level Decoder}
+The \texttt{SVC\_Handler\_C} function decodes the SVC instruction and dispatches to the appropriate kernel service.
+
+\vspace{0.3cm}
+\noindent\textbf{File:} \file{kern/arch/stm32f446re/sys\_lib/stm32\_startup.c}
+\begin{minted}[linenos,fontsize=\footnotesize]{c}
+void SVC_Handler_C(uint32_t *stack) {
+  // Extract stacked PC to locate the SVC instruction
+  uint32_t pc = stack[6];
+  
+  // Read the SVC instruction opcode (at PC - 2 in Thumb mode)
+  uint8_t *svc_inst = (uint8_t *)(pc - 2);
+  uint8_t svc_number = svc_inst[0];  // Lower byte contains immediate
+  
+  // Extract arguments from stacked registers
+  uint32_t a0 = stack[0];  // R0
+  uint32_t a1 = stack[1];  // R1
+  uint32_t a2 = stack[2];  // R2
+  uint32_t a3 = stack[3];  // R3
+  
+  // Dispatch to kernel service
+  int32_t retval = syscall_dispatch(svc_number, a0, a1, a2, a3);
+  
+  // Write return value back to stacked R0
+  stack[0] = (uint32_t)retval;
+}
+\end{minted}
+
+\textbf{Implementation Details:}
+\begin{enumerate}[leftmargin=2em,label=\alph*)]
+  \item \textbf{SVC Immediate Extraction:} The stacked PC (\texttt{stack[6]}) points to the instruction \emph{after} the SVC. In Thumb-2 mode, an \texttt{svc} instruction is encoded as \texttt{0xDFxx}, where the lower byte (\texttt{xx}) carries the syscall number.\footnote{The ARMv7-M architecture reference specifies this encoding in section A7.7.175.}
+  \item \textbf{Argument Extraction:} Hardware automatically stacks \texttt{r0--r3} at positions [0--3], making them directly accessible as function arguments.
+  \item \textbf{Return Value Handling:} The return value is written back to \texttt{stack[0]}, which corresponds to register r0. When the exception unwinds, the user code sees this value.
+\end{enumerate}
+
+This keeps the handler deterministic and side-effect free---vital when the same path is reused by nested exceptions or future unprivileged tasks.
+
+\section{Syscall Dispatcher}
+
+\subsection{Dispatcher Architecture}
+The dispatcher in \file{kern/syscall/syscall.c} serves as the central routing mechanism for all system calls. It maintains a single switch statement with explicit fall-through prevention and ENOSYS handling for invalid syscall numbers.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=1cm, every node/.style={font=\small}]
+  \node[process] (entry) {syscall\_dispatch()};
+  \node[decision, below=1.2cm of entry, aspect=2.5] (switch) {Syscall\\Number?};
+  
+  % Left branch
+  \node[smallblock, below left=1.5cm and 2.5cm of switch] (read) {SYS\_read\\(50)};
+  \node[smallblock, below=0.5cm of read] (write) {SYS\_write\\(55)};
+  
+  % Center branch
+  \node[smallblock, below=1.5cm of switch] (time) {SYS\_time\\(113)};
+  \node[smallblock, below=0.5cm of time] (getpid) {SYS\_getpid\\(5)};
+  
+  % Right branch
+  \node[smallblock, below right=1.5cm and 2.5cm of switch] (yield) {SYS\_yield\\(120)};
+  \node[smallblock, below=0.5cm of yield] (reboot) {SYS\_reboot\\(119)};
+  \node[smallblock, below=0.5cm of reboot] (exit) {SYS\_exit\\(3)};
+  
+  % Default case
+  \node[smallblock, right=2cm of yield, fill=red!20] (enosys) {Return\\-ENOSYS};
+  
+  % Merge point
+  \node[process, below=2.5cm of time] (return) {Return to Handler};
+  
+  % Arrows
+  \draw[line] (entry) -- (switch);
+  \draw[line] (switch) -| (read);
+  \draw[line] (switch) -| (write);
+  \draw[line] (switch) -- (time);
+  \draw[line] (switch) -- (getpid);
+  \draw[line] (switch) -| (yield);
+  \draw[line] (switch) -| (reboot);
+  \draw[line] (switch) -| (exit);
+  \draw[line] (switch) -- (enosys);
+  
+  \draw[line] (read) |- (return);
+  \draw[line] (write) |- (return);
+  \draw[line] (time) -- (return);
+  \draw[line] (getpid) -- (return);
+  \draw[line] (yield) |- (return);
+  \draw[line] (reboot) |- (return);
+  \draw[line] (exit) |- (return);
+  \draw[line] (enosys) |- (return);
+\end{tikzpicture}
+\caption{Syscall Dispatcher Flow}
+\label{fig:dispatcher}
+\end{figure}
+
+The file also hosts \texttt{g\_current\_task\_id}, a global variable exported for both kernel book-keeping and the \texttt{SYS\_getpid} result. This variable is initialized to 1000 during system boot.
+
+\subsection{Implemented Services}
+Table~\ref{tab:syscalls} documents each implemented syscall end-to-end. The `User Wrapper` column references the API in \file{userland/utils/unistd.c}; the kernel actions cite the core functions touched.
+
+\begin{table}[h]
+  \centering
+  \begin{tabularx}{\linewidth}{@{}L{2.7cm}C{1.2cm}Y Y@{}}
+    \toprule
+    \textbf{Syscall} & \textbf{ID} & \textbf{User Wrapper} & \textbf{Kernel Action} \\
+    \midrule
+    \texttt{SYS\_read} & 50 & \texttt{ssize\_t read(int, void*, size)} & Block on console RX (\texttt{IsDataAvailable}) until newline or 256 bytes, terminate buffer, return byte count. \\
+    \texttt{SYS\_write} & 55 & \texttt{ssize\_t write(int, const void*, size)} & Iterate through buffer, transmit via \texttt{Uart\_write} for \texttt{STDOUT\_FILENO}. \\
+    \texttt{SYS\_\_\_time} & 113 & \texttt{uint32\_t getSysTickTime(void)} & Return \texttt{\_\_getTime()} (ms counter). \\
+    \texttt{SYS\_getpid} & 5 & \texttt{int getpid(void)} & Expose \texttt{g\_current\_task\_id} (seeded to 1000). \\
+    \texttt{SYS\_yield} & 120 & \texttt{int yield(void)} & Set \reg{SCB->ICSR |= PENDSVSET}; return 0. \\
+    \texttt{SYS\_reboot} & 119 & \texttt{int reboot(void)} & Invoke \texttt{\_\_NVIC\_SystemReset()} for a full MCU reset. \\
+    \texttt{SYS\_\_exit} & 3 & \texttt{void exit(int)} & Pend PendSV for scheduler to reclaim task; stub loops in \texttt{\_exit}. \\
+    \bottomrule
+  \end{tabularx}
+  \caption{Implemented syscalls and their execution path.}
+  \label{tab:syscalls}
+\end{table}
+
+Unknown call numbers fall back to \texttt{ENOSYS}, enabling straightforward validation from userland.
+
+\subsection{Support Utilities}
+\begin{itemize}[leftmargin=1.5em]
+  \item UART services rely on the driver trio \file{kern/arch/stm32f446re/sys\_lib/sys\_usart.c}, \file{kern/lib/UsartRingBuffer.c}, and \file{kern/lib/kern/serial\_lin.c} for buffered I/O.
+  \item Timing relies solely on the SysTick counter---no additional hardware timers are consumed.
+  \item \texttt{g\_current\_task\_id} lives in RAM (BSS); a volatile pointer alias (\texttt{\_\_g\_current\_task\_id\_ref}) exists to prevent dead-code elimination and simplify debugger inspection.
+\end{itemize}
+
+\section{Userland Interface}
+
+\subsection{Wrapper Macro}
+All syscall wrappers share a common \texttt{SVC\_CALL} macro that provides a clean interface between user code and the kernel. This macro uses inline assembly to comply with ARM EABI calling conventions.
+
+\vspace{0.3cm}
+\noindent\textbf{File:} \file{userland/utils/unistd.c}
+\begin{minted}[linenos,fontsize=\footnotesize]{c}
+#define SVC_CALL(num, a0, a1, a2, a3) ({               \
+  register uint32_t r0 __asm("r0") = (uint32_t)(a0);    \
+  register uint32_t r1 __asm("r1") = (uint32_t)(a1);    \
+  register uint32_t r2 __asm("r2") = (uint32_t)(a2);    \
+  register uint32_t r3 __asm("r3") = (uint32_t)(a3);    \
+  __asm volatile("svc %[imm]"                           \
+                 : "+r"(r0)                             \
+                 : [imm] "I"(num), "r"(r1), "r"(r2), "r"(r3) \
+                 : "memory");                           \
+  r0; })
+\end{minted}
+
+\textbf{Key Properties:}
+\begin{itemize}[leftmargin=1.5em]
+  \item \textbf{Register Constraints:} The \texttt{\_\_asm("r0")} syntax forces the compiler to place arguments in specific registers (r0--r3), matching the ARM EABI.
+  \item \textbf{Return Value Capture:} The inline assembly constraint \texttt{"+r"} for \reg{r0} indicates it is both an input and output, capturing the kernel return value without extra moves.
+  \item \textbf{Memory Barrier:} The explicit clobber of \texttt{"memory"} prevents the compiler from reordering memory accesses around the syscall, ensuring proper sequencing of operations.
+  \item \textbf{Immediate Constraint:} The \texttt{"I"} constraint requires the syscall number to be a compile-time constant, allowing it to be encoded directly in the SVC instruction.
+  \item \textbf{EABI Compliance:} All wrappers comply with the standard ARM EABI argument passing rules, ensuring compatibility with any future compiled user applications.
+\end{itemize}
+
+\subsection{Example Wrapper Implementation}
+Here's the implementation of the \texttt{write()} syscall wrapper:
+
+\begin{minted}[linenos,fontsize=\footnotesize]{c}
+ssize_t write(int fd, const void *buf, size_t count) {
+  return (ssize_t)SVC_CALL(SYS_write, fd, buf, count, 0);
+}
+\end{minted}
+
+The wrapper is simple and efficient---it merely packages the arguments and invokes the SVC instruction. All complexity is handled by the kernel dispatcher.
+
+\subsection{Published API}
+The user-visible prototypes reside in \file{userland/include/unistd.h}. Besides the mandatory seven wrappers, \texttt{\_exit()} spins after pended termination to guarantee that the caller never returns to a potentially reclaimed stack frame.
+
+\begin{minted}[linenos,fontsize=\footnotesize]{c}
+// userland/include/unistd.h
+ssize_t read(int fd, void *buf, size_t count);
+ssize_t write(int fd, const void *buf, size_t count);
+uint32_t getSysTickTime(void);
+int getpid(void);
+int yield(void);
+int reboot(void);
+void exit(int status) __attribute__((noreturn));
+\end{minted}
+
+\section{Demo Application}
+
+\subsection{Test Application Overview}
+The demonstrator in \file{kern/kmain/kmain.c} performs an A-to-Z validation of the syscall surface. The application systematically exercises each implemented syscall to verify correct operation.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.9cm, every node/.style={font=\small}]
+  \node[cloud, text width=4cm] (boot) {System Boot\\\_\_sys\_init()};
+  \node[process, below=of boot, text width=5cm] (init) {Initialize task\_id = 1000};
+  \node[process, below=of init, text width=5cm] (write) {Test write()\\Print greeting to UART};
+  \node[process, below=of write, text width=5cm] (time) {Test getSysTickTime()\\Query system timer};
+  \node[process, below=of time, text width=5cm] (getpid) {Test getpid()\\Get current task ID};
+  \node[process, below=of getpid, text width=5cm] (yield) {Test yield()\\Trigger PendSV};
+  \node[process, below=of yield, text width=5cm, fill=red!10] (exit) {Test exit(0)\\Terminate task};
+  
+  \draw[line] (boot) -- (init);
+  \draw[line] (init) -- (write);
+  \draw[line] (write) -- (time);
+  \draw[line] (time) -- (getpid);
+  \draw[line] (getpid) -- (yield);
+  \draw[line] (yield) -- (exit);
+  
+  % Side annotations
+  \node[right=0.5cm of write, text width=3.5cm, align=left, font=\footnotesize] {Verifies UART\\output path};
+  \node[right=0.5cm of time, text width=3.5cm, align=left, font=\footnotesize] {Confirms timing\\infrastructure};
+  \node[right=0.5cm of getpid, text width=3.5cm, align=left, font=\footnotesize] {Tests global\\state access};
+\end{tikzpicture}
+\caption{Demo Application Execution Flow}
+\label{fig:demo-flow}
+\end{figure}
+
+\subsection{Test Sequence}
+\begin{enumerate}[leftmargin=2em,label=\arabic*.]
+  \item \textbf{Hardware Initialization:} Call \texttt{\_\_sys\_init()} and assign \texttt{task\_id = 1000}.
+  \item \textbf{UART Output Test:} Print a greeting via \texttt{write(STDOUT, ...)} and confirm UART TX.
+  \item \textbf{Timing Test:} Query \texttt{getSysTickTime()} and verify the millisecond counter is incrementing.
+  \item \textbf{Process ID Test:} Call \texttt{getpid()} and verify it returns 1000; print both time and PID via kernel \texttt{kprintf()} for visibility on the debug UART.
+  \item \textbf{Scheduling Test:} Trigger \texttt{yield()} to demonstrate that PendSV requests are raised from both userland and SysTick (every 10~ms).
+  \item \textbf{Termination Test:} Finish with \texttt{exit(0)}, after which control never returns because PendSV will eventually recycle the context once the scheduler is in place.
+\end{enumerate}
+
+Throughout this flow, the kernel prints diagnostic lines confirming each stage, making it trivial to capture UART logs as evidence of correct operation.
+
+\section{Memory Usage Analysis}
+
+\subsection{Linker Statistics}
+The following memory statistics were extracted from the linker map file (\texttt{compile/Makefile} output) for the current build:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Section} & \textbf{Size (bytes)} & \textbf{Size (KB)} & \textbf{Percentage} \\
+\midrule
+Text (Flash) & 20,948 & 20.5 & 4.0\% of 512 KB \\
+Data (RAM init) & 108 & 0.1 & 0.08\% of 128 KB \\
+BSS (RAM zero) & 2,305 & 2.3 & 1.8\% of 128 KB \\
+\midrule
+\textbf{Total Flash} & \textbf{20,948} & \textbf{20.5} & \textbf{4.0\%} \\
+\textbf{Total RAM} & \textbf{2,413} & \textbf{2.4} & \textbf{1.9\%} \\
+\bottomrule
+\end{tabular}
+\caption{Memory utilization breakdown}
+\label{tab:memory}
+\end{table}
+
+\subsection{Analysis}
+These numbers were collected from the map file emitted via \texttt{compile/Makefile}. The small footprint demonstrates efficient implementation:
+
+\begin{itemize}[leftmargin=1.5em]
+  \item \textbf{Flash Usage:} Only 4.0\% of available flash is consumed, leaving 491.5 KB (96\%) available for the upcoming scheduler, IPC primitives, and filesystem services.
+  \item \textbf{RAM Usage:} Minimal RAM consumption (1.9\%) ensures ample space for task stacks, dynamic memory allocation, and kernel data structures.
+  \item \textbf{Code Density:} The implementation achieves comprehensive syscall functionality with minimal overhead, validating the design choices.
+\end{itemize}
+
+\section{Testing and Verification}
+
+\subsection{Test Methodology}
+All syscalls were tested individually and in integrated scenarios using both hardware debugging and serial terminal monitoring. The test platform consisted of the STM32F446RE Nucleo board connected via ST-LINK debugger and UART to a host PC.
+
+\subsection{Test Results}
+
+\begin{table}[h]
+\centering
+\begin{tabularx}{\linewidth}{@{}l X c@{}}
+\toprule
+\textbf{Test Category} & \textbf{Description} & \textbf{Status} \\
+\midrule
+UART I/O & Verified bidirectional character flow for \texttt{read()} and \texttt{write()} using a serial terminal at 115200 baud; newline termination and buffer capping (256 bytes) behave as designed. & \textcolor{green!60!black}{\textbf{PASS}} \\[0.3cm]
+Timing Infrastructure & Observed the millisecond counter (\texttt{g\_msTick}) incrementing monotonically and the 10~ms PendSV cadence on a debugger watch window. Verified timing accuracy with oscilloscope. & \textcolor{green!60!black}{\textbf{PASS}} \\[0.3cm]
+System Reset & Invoked \texttt{reboot()} from userland; the MCU executed NVIC system reset and returned to \texttt{kmain()} cleanly with all globals and peripherals reinitialised. & \textcolor{green!60!black}{\textbf{PASS}} \\[0.3cm]
+Task Management & Confirmed that \texttt{yield()} triggers the PendSV stub (verified via debugger breakpoint) and that \texttt{exit()} never returns to the caller, matching a cooperative multitasking contract. & \textcolor{green!60!black}{\textbf{PASS}} \\[0.3cm]
+Process ID & Verified \texttt{getpid()} consistently returns the seeded task ID (1000) across multiple invocations. & \textcolor{green!60!black}{\textbf{PASS}} \\[0.3cm]
+Error Handling & Tested invalid syscall numbers; confirmed dispatcher returns \texttt{-ENOSYS} (38) as expected. & \textcolor{green!60!black}{\textbf{PASS}} \\
+\bottomrule
+\end{tabularx}
+\caption{Comprehensive test results}
+\label{tab:test-results}
+\end{table}
+
+
+\section{Known Limitations and Future Work}
+
+\subsection{Current Limitations}
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Scheduler Stub:} PendSV currently serves as a stub that immediately returns. The context switcher and Task Control Block (TCB) management must be implemented to enable true multitasking.
+  
+  \item \textbf{Limited File Descriptors:} The syscall layer presently filters solely on \texttt{STDIN\_FILENO}/\texttt{STDOUT\_FILENO}. Extending to additional devices or descriptors will require a dispatch table and resource tracking infrastructure.
+  
+  \item \textbf{Minimal Error Handling:} Error codes are basic. Future work should propagate comprehensive errno values (\texttt{-EINTR}, \texttt{-EBADF}, \texttt{-EAGAIN}, etc.) and integrate with a userspace-visible \texttt{errno} mechanism.
+  
+  \item \textbf{No Privilege Separation:} The demo executes in privileged mode. Once multiple tasks exist, PSP/MSP segregation and unprivileged thread mode will be introduced to enforce proper isolation.
+  
+  \item \textbf{Blocking I/O:} The \texttt{read()} syscall blocks indefinitely. A timeout mechanism or non-blocking variants would improve responsiveness.
+  
+  \item \textbf{Single Task Model:} Currently supports only one implicit task. Multi-task support requires scheduler, stack management, and inter-task communication primitives.
+\end{enumerate}
+
+\section{Implementation File Inventory}
+
+\subsection{Core System Call Infrastructure}
+\begin{table}[h]
+\centering
+\begin{tabularx}{\linewidth}{@{}l X@{}}
+\toprule
+\textbf{File} & \textbf{Description} \\
+\midrule
+\file{kern/syscall/syscall.c} & Central dispatcher implementing switch-based routing for all seven syscalls; hosts \texttt{g\_current\_task\_id} \\[0.2cm]
+\file{kern/include/syscall.h} & Syscall number definitions, dispatcher prototypes, and kernel-side type declarations \\[0.2cm]
+\file{userland/utils/unistd.c} & User-space wrapper implementations using SVC\_CALL macro for all seven syscalls \\[0.2cm]
+\file{userland/include/unistd.h} & Public API declarations for user applications; POSIX-style function signatures \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Exception Handling and Hardware Integration}
+\begin{table}[h]
+\centering
+\begin{tabularx}{\linewidth}{@{}l X@{}}
+\toprule
+\textbf{File} & \textbf{Description} \\
+\midrule
+\file{kern/arch/stm32f446re/sys\_lib/stm32\_startup.c} & Vector table, naked SVCall\_Handler (assembly shim), and SVC\_Handler\_C (decoder) \\[0.2cm]
+\file{kern/arch/cm4/systick.c} & SysTick ISR, millisecond counter maintenance, 10~ms PendSV trigger logic \\[0.2cm]
+\file{kern/lib/kern/sys\_init.c} & System initialization: clock configuration, FPU enable, UART setup, SysTick initialization \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Support Libraries and Drivers}
+\begin{table}[h]
+\centering
+\begin{tabularx}{\linewidth}{@{}l X@{}}
+\toprule
+\textbf{File} & \textbf{Description} \\
+\midrule
+\file{kern/arch/stm32f446re/sys\_lib/sys\_usart.c} & Low-level UART driver for STM32F446RE (USART2 \& USART6) \\[0.2cm]
+\file{kern/lib/UsartRingBuffer.c} & Circular buffer implementation for UART RX/TX buffering \\[0.2cm]
+\file{kern/lib/kern/serial\_lin.c} & Serial line discipline, character echo, line editing \\[0.2cm]
+\file{kern/include/kern/types.h} & Type definitions and constants (errno values, file descriptors) \\[0.2cm]
+\file{kern/kmain/kmain.c} & Demo application orchestrating syscall validation tests \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Build System}
+\begin{itemize}[leftmargin=1.5em]
+  \item \file{compile/Makefile} -- Master build script with compiler flags, linker script integration, and map file generation
+\end{itemize}
+
+\section{Conclusion}
+
+This assignment successfully establishes a robust, hardware-accelerated system call infrastructure for DUOS on the STM32F446RE platform. The implementation demonstrates several key achievements:
+
+
+\vspace{1cm}
+\begin{center}
+\rule{0.8\linewidth}{0.5pt}\\[0.3cm]
+\textit{End of Report}
+\end{center}
+
+\end{document}
