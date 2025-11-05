@@ -59,10 +59,26 @@ void kmain(void) {
   kprintf("Current time: %d ms, pid: %d\r\n", t, pid);
   char msg2[1024];
   kprintf("Enter text: ");
-  kscanf("%s", msg2);
-  kprintf("You entered: %s\r\n", msg2);
+  // kscanf("%s", msg2);
+  read(STDIN_FILENO, msg2, __strlen((uint8_t *)msg2));
+  // read(STDIN_FILENO, msg2, __strlen((uint8_t *)msg2));
+  kprintf("You entered: ");
   write(STDOUT_FILENO, msg2, __strlen((uint8_t *)msg2));
-  kprintf("Calling yield()...\r\n");
+
+  uint32_t t2 = getSysTickTime();
+  uint8_t *t2_str = convertu32(t2, 10);
+  int pid2 = getpid();
+  uint8_t *pid2_str = convert(pid2, 10);
+
+  kprintf("\nSysTickTime: ");
+  write(STDOUT_FILENO, t2_str, __strlen(t2_str));
+  write(STDOUT_FILENO, "\r\n", 2);
+
+  kprintf("\npid: ");
+  write(STDOUT_FILENO, pid2_str, __strlen(pid2_str));
+  write(STDOUT_FILENO, "\r\n", 2);
+
+  kprintf("\nCalling yield()...\r\n");
   yield();
 
   kprintf("After yield(), calling exit(0)...\r\n");
