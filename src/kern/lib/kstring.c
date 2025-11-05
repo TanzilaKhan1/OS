@@ -171,6 +171,11 @@ void *kmemset(void *to_ptr, uint8_t ch, size_t size) {
   return to_ptr;
 }
 
+// Minimal libc shim for bare-metal: some compiler paths may call memset
+void *memset(void *s, int c, size_t n) {
+  return kmemset(s, (uint8_t)c, n);
+}
+
 void StrCat(char *dest, char *src) {
   while (*dest) {
     dest++;

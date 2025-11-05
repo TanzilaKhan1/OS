@@ -54,11 +54,14 @@ void kmain(void) {
 
   uint32_t t = getSysTickTime();
   int pid = getpid();
-
   kprintf("getSysTickTime() returned: %d ms\r\n", t);
   kprintf("getpid() returned: %d\r\n", pid);
   kprintf("Current time: %d ms, pid: %d\r\n", t, pid);
-
+  char msg2[1024];
+  kprintf("Enter text: ");
+  kscanf("%s", msg2);
+  kprintf("You entered: %s\r\n", msg2);
+  write(STDOUT_FILENO, msg2, __strlen((uint8_t *)msg2));
   kprintf("Calling yield()...\r\n");
   yield();
 
