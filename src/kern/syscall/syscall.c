@@ -33,6 +33,7 @@
 #include <errmsg.h>
 #include <errno.h>
 #include <kunistd.h>
+#include <kstdio.h>
 #include <sys_usart.h>
 #include <syscall.h>
 #include <syscall_def.h>
@@ -55,22 +56,7 @@ uint32_t syscall_dispatch(uint16_t callno, uint32_t a0, uint32_t a1,
     if (len > 256U) {
       len = 256U;
     }
-    uint32_t count = 0U;
-    while (count < len) {
-      while (IsDataAvailable(__CONSOLE) == 0) {
-      }
-      int c = Uart_read(__CONSOLE);
-      if (c < 0) {
-        break;
-      }
-      buf[count++] = (uint8_t)c;
-      if ((uint8_t)c == '\n') {
-        break;
-      }
-    }
-    if (count < len) {
-      buf[count] = '\0';
-    }
+    uint32_t count = read_string_syscall(buf, len);
     return count;
   }
   case SYS_write: {

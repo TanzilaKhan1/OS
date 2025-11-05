@@ -93,7 +93,9 @@ void kprintf(char *format,...)
 			}*/
 			Uart_sendstring((char*)convertu32(i,16),__CONSOLE);
 			break;
-		case 'u':	
+		case 'u': i = va_arg(list,unsigned int);
+			Uart_sendstring((char*)convertu32(i,10),__CONSOLE);
+			break;
 		case 's': str = va_arg(list,uint8_t*);
 			Uart_sendstring((char*)str,__CONSOLE);
 			break;
@@ -116,6 +118,30 @@ void putstr(const uint8_t *str,size_t size)
 	}
 }
 
+// Helper function to read a string using syscall mechanism
+// Returns count of bytes read (excluding null terminator if added)
+uint32_t read_string_syscall(uint8_t *buff, size_t max_len)
+{
+	uint32_t count = 0U;
+	if (buff == 0 || max_len == 0U) {
+		return 0U;
+	}
+	while (count < (max_len - 1U)) {
+		while (IsDataAvailable(__CONSOLE) == 0) {
+		}
+		int c = Uart_read(__CONSOLE);
+		if (c < 0) {
+			break;
+		}
+		if ((uint8_t)c == '\n' || (uint8_t)c == '\r') {
+			break;
+		}
+		buff[count++] = (uint8_t)c;
+	}
+	buff[count] = '\0';
+	return count;
+}
+
 // Simplified version of scanf
 void kscanf(char *format,...)
 {
@@ -135,30 +161,31 @@ void kscanf(char *format,...)
 			switch (*ptr)
 			{
 			case 'c': //charater
-				*(uint8_t*)va_arg(list,uint8_t*)=Uart_read(__CONSOLE);
+				while (IsDataAvailable(__CONSOLE) == 0) {
+				}
+				*(uint8_t*)va_arg(list,uint8_t*) = (uint8_t)Uart_read(__CONSOLE);
 				break;
 			case 'd': //integer number 
-				//uart_USART_READ_STR(USART2,buff,50); 
+				read_string_syscall(buff, sizeof(buff)); 
 				*(uint32_t*)va_arg(list,uint32_t*)=__str_to_num(buff,10);	
 				break;
 			case 's': //string without spaces
-				//_USART_READ_STR(USART2,buff,50); 
+				read_string_syscall(buff, sizeof(buff)); 
 				str = va_arg(list,uint8_t*);
 				len = __strlen(buff);
 				for(int u = 0; u<=len; u++)	// copy from buff to user defined char pointer (i.e string)
 					str[u] = buff[u];	
 				break;
 			case 'x': //hexadecimal number
-				//_USART_READ_STR(USART2,buff,50); 
+				read_string_syscall(buff, sizeof(buff)); 
 				*(int*)va_arg(list,uint32_t*)=__str_to_num(buff,16);	
 				break;	
 			case 'o': //octal number
-				//_USART_READ_STR(USART2,buff,50); 
+				read_string_syscall(buff, sizeof(buff)); 
 				*(uint32_t*)va_arg(list,uint32_t*)=__str_to_num(buff,8);	
 				break;	
 			case 'f': //floating point number
-				//_USART_READ_STR(USART2,buff,50);
-				//*(uint32_t*)va_arg(list,double*) = __str_to_num(buff,10);
+				read_string_syscall(buff, sizeof(buff));
 				*(float*)va_arg(list,float*) = str2float(buff);	// Works for float but not for double !!!
 				break;	
 			default: //rest not recognized
