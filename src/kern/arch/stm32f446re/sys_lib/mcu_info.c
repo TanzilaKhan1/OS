@@ -25,8 +25,8 @@ void show_system_info(void)
         break;
     }
     kprintf(", Flash Memory %d KB",MCUINFO->F_SIZE);
-    kprintf("\n");
-    kprintf("Product ID: %s\n",product_id);
+    kprintf("\r\n");
+    kprintf("Product ID: %s\r\n",product_id);
 }
 
 void store_product_id(void)
