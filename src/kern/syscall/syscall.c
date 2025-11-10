@@ -56,7 +56,9 @@ uint32_t syscall_dispatch(uint16_t callno, uint32_t a0, uint32_t a1,
     if (len > 256U) {
       len = 256U;
     }
-    uint32_t count = read_string_syscall(buf, len);
+    
+    uint32_t count = read_available_nonblocking(buf, len);
+    
     return count;
   }
   case SYS_write: {

@@ -118,61 +118,60 @@ void putstr(const uint8_t *str, size_t size) {
   }
 }
 
-// Helper function to read a string using syscall mechanism
-// Returns count of bytes read (excluding null terminator if added)
-uint32_t read_string_syscall(uint8_t *buff, size_t max_len) {
+
+// NON-BLOCKING version - For use in syscall handlers (SYS_read)
+// Reads only available characters without waiting
+// Returns count of bytes read, or 0 if no data available
+// NO ECHO - application is responsible for echo if needed
+uint32_t read_available_nonblocking(uint8_t *buff, size_t max_len) {
   uint32_t count = 0U;
+
   if (buff == 0 || max_len == 0U) {
     return 0U;
   }
+
+  // Cap at 256 bytes as per assignment requirements
+  if (max_len > 256U) {
+    max_len = 256U;
+  }
+
+  // Read all available characters without blocking
   while (count < (max_len - 1U)) {
-    // treat non-positive as "no data"
-    while (IsDataAvailable(__CONSOLE) <= 0) {
+    // Check if data available - DON'T WAIT!
+    if (IsDataAvailable(__CONSOLE) <= 0) {
+      break;  // No more data, return immediately
     }
+
     int c = Uart_read(__CONSOLE);
     if (c < 0) {
-      // try again instead of bailing out
-      continue;
+      break;  // Error or no data, stop reading
     }
-    // handle backspace/delete
+
+    // Handle backspace/delete
     if ((uint8_t)c == 0x08U || (uint8_t)c == 0x7FU) {
       if (count > 0U) {
-        count--;
-        // echo erase (BS, space, BS)
-        Uart_write('\b', __CONSOLE);
-        Uart_write(' ', __CONSOLE);
-        Uart_write('\b', __CONSOLE);
+        count--;  // Remove last character
       }
       continue;
     }
+
+    // Store character
+    buff[count++] = (uint8_t)c;
+
+    // Stop at newline
     if ((uint8_t)c == '\n' || (uint8_t)c == '\r') {
-      // echo newline as CRLF for readability
-      Uart_write('\r', __CONSOLE);
-      Uart_write('\n', __CONSOLE);
       break;
     }
-    // echo normal character
-    Uart_write((uint8_t)c, __CONSOLE);
-    buff[count++] = (uint8_t)c;
   }
-  buff[count] = '\0';
-  // if input exceeded max_len-1, drain the rest of the line to keep buffer in
-  // sync
-  if (count == (max_len - 1U)) {
-    while (1) {
-      while (IsDataAvailable(__CONSOLE) <= 0) {
-      }
-      int c = Uart_read(__CONSOLE);
-      if (c < 0) {
-        continue;
-      }
-      if ((uint8_t)c == '\n' || (uint8_t)c == '\r') {
-        break;
-      }
-    }
+
+  // Null terminate if there's room
+  if (count < max_len) {
+    buff[count] = '\0';
   }
+
   return count;
 }
+
 
 // Simplified version of scanf
 void kscanf(char *format, ...) {
@@ -181,7 +180,6 @@ void kscanf(char *format, ...) {
   char *ptr;
   uint8_t buff[1024];
   uint8_t *str;
-  int len;
   ptr = format;
   va_start(list, format);
   while (*ptr) {
@@ -209,7 +207,7 @@ void kscanf(char *format, ...) {
         }
         break;
       case 'd': // integer number
-        read_string_syscall(buff, sizeof(buff));
+        read_available_nonblocking(buff, sizeof(buff));
         {
           uint8_t numtok[50];
           uint32_t i = 0U, j = 0U;
@@ -237,7 +235,7 @@ void kscanf(char *format, ...) {
         }
         break;
       case 's': // string (read entire line, including spaces)
-        read_string_syscall(buff, sizeof(buff));
+        read_available_nonblocking(buff, sizeof(buff));
         {
           str = (uint8_t *)va_arg(list, uint8_t *);
           uint32_t i = 0U;
@@ -249,7 +247,7 @@ void kscanf(char *format, ...) {
         }
         break;
       case 'x': // hexadecimal number
-        read_string_syscall(buff, sizeof(buff));
+        read_available_nonblocking(buff, sizeof(buff));
         {
           uint8_t hextok[50];
           uint32_t i = 0U, j = 0U;
@@ -270,7 +268,7 @@ void kscanf(char *format, ...) {
         }
         break;
       case 'o': // octal number
-        read_string_syscall(buff, sizeof(buff));
+        read_available_nonblocking(buff, sizeof(buff));
         {
           uint8_t octtok[50];
           uint32_t i = 0U, j = 0U;
@@ -289,7 +287,7 @@ void kscanf(char *format, ...) {
         }
         break;
       case 'f': // floating point number
-        read_string_syscall(buff, sizeof(buff));
+        read_available_nonblocking(buff, sizeof(buff));
         {
           uint8_t floattok[50];
           uint32_t i = 0U, j = 0U;

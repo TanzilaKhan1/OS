@@ -37,5 +37,5 @@
 void kprintf(char *, ...);
 void kscanf(char *, ...);
 void putstr(const uint8_t *, size_t);
-uint32_t read_string_syscall(uint8_t *buff, size_t max_len);
+uint32_t read_available_nonblocking(uint8_t *buff, size_t max_len);
 #endif /* KSTDIO */

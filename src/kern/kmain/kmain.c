@@ -59,11 +59,43 @@ void kmain(void) {
   kprintf("Current time: %d ms, pid: %d\r\n", t, pid);
   char msg2[1024];
   kprintf("Enter text: ");
-  kscanf("%s", msg2);
-  //int len = read(STDIN_FILENO, msg2, __strlen((uint8_t *)msg2));
-  //kprintf("len: %d\r\n", len);
+  //kscanf("%s", msg2);
+  ssize_t len = 0;
+  ssize_t total = 0;
+  int got_eol = 0;
+  while (!got_eol) {
+    char chunk[64];
+    len = read(STDIN_FILENO, chunk, sizeof(chunk));
+    if (len > 0) {
+      for (ssize_t i = 0; i < len; i++) {
+        char c = chunk[i];
+        if (c == '\r' || c == '\n') {
+          write(STDOUT_FILENO, "\r\n", 2);
+          got_eol = 1;
+          break;
+        } else if ((uint8_t)c == 0x08U || (uint8_t)c == 0x7FU) {
+          if (total > 0) {
+            total--;
+            write(STDOUT_FILENO, "\b \b", 3);
+          }
+        } else {
+          if (total < (ssize_t)sizeof(msg2) - 1) {
+            msg2[total++] = c;
+            write(STDOUT_FILENO, &c, 1);
+          } else {
+            // buffer full: still allow editing/end but don't store further chars
+          }
+        }
+      }
+    } else {
+      // No data yet; yield CPU to avoid busy spin
+      yield();
+    }
+  }
+  msg2[total] = '\0';
+  len = total;
   kprintf("You entered: ");
-  write(STDOUT_FILENO, msg2, __strlen((uint8_t *)msg2));
+  write(STDOUT_FILENO, msg2, (size_t)len);
 
   uint32_t t2 = getSysTickTime();
   int pid2 = getpid();
