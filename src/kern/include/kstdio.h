@@ -37,5 +37,12 @@
 void kprintf(char *, ...);
 void kscanf(char *, ...);
 void putstr(const uint8_t *, size_t);
+
+// BLOCKING version - for direct kernel use (kscanf)
+// WARNING: DO NOT call from SVC handler - will block indefinitely!
 uint32_t read_string_syscall(uint8_t *buff, size_t max_len);
+
+// NON-BLOCKING version - for use in SYS_read syscall handler
+// Reads only available data, returns immediately if nothing available
+uint32_t read_available_nonblocking(uint8_t *buff, size_t max_len);
 #endif /* KSTDIO */

@@ -44,12 +44,12 @@
     r0;                                                                        \
   })
 
-ssize_t write(int fd, const void *buf, size_t count) {
-  return (ssize_t)SVC_CALL(SYS_write, fd, buf, count, 0U);
+ssize_t write(int fd, const void *buf, size_t count, uint32_t fmt) {
+  return (ssize_t)SVC_CALL(SYS_write, fd, buf, count, fmt);
 }
 
-ssize_t read(int fd, void *buf, size_t count) {
-  return (ssize_t)SVC_CALL(SYS_read, fd, buf, count, 0U);
+ssize_t read(int fd, void *buf, size_t count, uint32_t fmt) {
+  return (ssize_t)SVC_CALL(SYS_read, fd, buf, count, fmt);
 }
 
 int reboot(void) { return (int)SVC_CALL(SYS_reboot, 0U, 0U, 0U, 0U); }

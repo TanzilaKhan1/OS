@@ -150,6 +150,15 @@
 //-- Other reboot scheduling etc. --
 #define SYS_sync         118
 #define SYS_reboot       119
-#define SYS_yield        120	
+#define SYS_yield        120
+
+// Format types for formatted I/O (used in read/write a3 parameter)
+#define FMT_RAW    0  // Raw bytes (default, backward compatible)
+#define FMT_STRING 1  // String (%s)
+#define FMT_INT    2  // Integer (%d)
+#define FMT_FLOAT  3  // Float (%f)
+#define FMT_HEX    4  // Hexadecimal (%x)
+#define FMT_OCTAL  5  // Octal (%o)
+#define FMT_CHAR   6  // Character (%c)
 
 #endif /*End of SYSCALL_DEF_H */

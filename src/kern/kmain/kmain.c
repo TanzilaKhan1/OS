@@ -50,20 +50,68 @@ void kmain(void) {
   kprintf("Task ID set to: %d\r\n", g_current_task_id);
 
   char msg[] = "Hello from userland via write()\r\n";
-  write(STDOUT_FILENO, msg, sizeof(msg) - 1U);
+  write(STDOUT_FILENO, msg, sizeof(msg) - 1U, FMT_RAW);
 
   uint32_t t = getSysTickTime();
   int pid = getpid();
-  // kprintf("getSysTickTime() returned: %d ms\r\n", t);
-  // kprintf("getpid() returned: %d\r\n", pid);
   kprintf("Current time: %d ms, pid: %d\r\n", t, pid);
-  char msg2[1024];
-  kprintf("Enter text: ");
-  kscanf("%s", msg2);
-  //int len = read(STDIN_FILENO, msg2, __strlen((uint8_t *)msg2));
-  //kprintf("len: %d\r\n", len);
-  kprintf("You entered: ");
-  write(STDOUT_FILENO, msg2, __strlen((uint8_t *)msg2));
+
+  // ==========================================
+  // Formatted I/O Test
+  // ==========================================
+  kprintf("\r\n=== Formatted I/O Test ===\r\n");
+  kprintf("1. String  2. Integer  3. Float  4. Hex  5. Octal  6. Char\r\n");
+  kprintf("Enter your choice: ");
+  int choice = 0;
+  kscanf("%d", &choice);
+
+  kprintf("\r\nEnter input: ");
+
+  // Variables to hold different types
+  char str_buf[256];
+  int int_val;
+  float float_val;
+  uint32_t hex_val;
+  uint32_t oct_val;
+  char char_val;
+
+  // Read based on choice - syscall will use kscanf internally
+  switch (choice) {
+  case 1:  // String
+    read(STDIN_FILENO, str_buf, sizeof(str_buf), FMT_STRING);
+    kprintf("\r\nYou entered (string): ");
+    write(STDOUT_FILENO, str_buf, 0, FMT_STRING);
+    break;
+  case 2:  // Integer
+    read(STDIN_FILENO, &int_val, sizeof(int_val), FMT_INT);
+    kprintf("\r\nYou entered (int): ");
+    write(STDOUT_FILENO, &int_val, 0, FMT_INT);
+    break;
+  case 3:  // Float
+    read(STDIN_FILENO, &float_val, sizeof(float_val), FMT_FLOAT);
+    kprintf("\r\nYou entered (float): ");
+    write(STDOUT_FILENO, &float_val, 0, FMT_FLOAT);
+    break;
+  case 4:  // Hex
+    read(STDIN_FILENO, &hex_val, sizeof(hex_val), FMT_HEX);
+    kprintf("\r\nYou entered (hex): 0x");
+    write(STDOUT_FILENO, &hex_val, 0, FMT_HEX);
+    break;
+  case 5:  // Octal
+    read(STDIN_FILENO, &oct_val, sizeof(oct_val), FMT_OCTAL);
+    kprintf("\r\nYou entered (octal): ");
+    write(STDOUT_FILENO, &oct_val, 0, FMT_OCTAL);
+    break;
+  case 6:  // Char
+    read(STDIN_FILENO, &char_val, sizeof(char_val), FMT_CHAR);
+    kprintf("\r\nYou entered (char): ");
+    write(STDOUT_FILENO, &char_val, 0, FMT_CHAR);
+    break;
+  default:
+    kprintf("\r\nInvalid choice!");
+    break;
+  }
+  kprintf("\r\n");
 
   uint32_t t2 = getSysTickTime();
   int pid2 = getpid();
@@ -71,13 +119,13 @@ void kmain(void) {
   kprintf("\n");
   kprintf("\r\nSysTickTime: ");
   uint8_t *t2_str = convertu32(t2, 10);
-  write(STDOUT_FILENO, t2_str, __strlen(t2_str));
-  write(STDOUT_FILENO, "\r\n", 2);
+  write(STDOUT_FILENO, t2_str, __strlen(t2_str), FMT_RAW);
+  write(STDOUT_FILENO, "\r\n", 2, FMT_RAW);
 
   kprintf("pid: ");
   uint8_t *pid2_str = convert(pid2, 10);
-  write(STDOUT_FILENO, pid2_str, __strlen(pid2_str));
-  write(STDOUT_FILENO, "\r\n", 2);
+  write(STDOUT_FILENO, pid2_str, __strlen(pid2_str), FMT_RAW);
+  write(STDOUT_FILENO, "\r\n", 2, FMT_RAW);
 
   kprintf("\nCalling yield()...\r\n");
   yield();

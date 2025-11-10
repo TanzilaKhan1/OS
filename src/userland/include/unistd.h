@@ -36,10 +36,19 @@
 #define STDIN_FILENO 0
 #define STDOUT_FILENO 1
 
+// Format types for formatted I/O (used in read/write a3 parameter)
+#define FMT_RAW    0  // Raw bytes (default, backward compatible)
+#define FMT_STRING 1  // String (%s)
+#define FMT_INT    2  // Integer (%d)
+#define FMT_FLOAT  3  // Float (%f)
+#define FMT_HEX    4  // Hexadecimal (%x)
+#define FMT_OCTAL  5  // Octal (%o)
+#define FMT_CHAR   6  // Character (%c)
+
 typedef int32_t ssize_t;
 
-ssize_t write(int fd, const void *buf, size_t count);
-ssize_t read(int fd, void *buf, size_t count);
+ssize_t write(int fd, const void *buf, size_t count, uint32_t fmt);
+ssize_t read(int fd, void *buf, size_t count, uint32_t fmt);
 int reboot(void);
 int getpid(void);
 void _exit(int status);
