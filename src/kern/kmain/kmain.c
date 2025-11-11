@@ -63,9 +63,14 @@ void kmain(void) {
   kprintf("1. String  2. Integer  3. Float  4. Hex  5. Octal  6. Char\r\n");
   kprintf("Enter your choice: ");
   int choice = 0;
-  kscanf("%d", &choice);
-
-  kprintf("\r\nEnter input: ");
+  //kscanf("%d", &choice);
+  // Retry read until data is available (non-blocking I/O with application-level retry)
+  while (read(STDIN_FILENO, &choice, sizeof(choice), FMT_INT) == 0) {
+    // No data ready yet, retry
+    // In a real system, this could yield to other tasks
+  }
+  kprintf("\r\nYou entered (choice): ");
+  write(STDOUT_FILENO, &choice, 0, FMT_INT);
 
   // Variables to hold different types
   char str_buf[256];
@@ -75,35 +80,37 @@ void kmain(void) {
   uint32_t oct_val;
   char char_val;
 
-  // Read based on choice - syscall will use kscanf internally
+  kprintf("\r\nEnter the value: ");
+  
+  // Read based on choice - syscall uses non-blocking I/O, so we retry here
   switch (choice) {
   case 1:  // String
-    read(STDIN_FILENO, str_buf, sizeof(str_buf), FMT_STRING);
+    while (read(STDIN_FILENO, str_buf, sizeof(str_buf), FMT_STRING) == 0);
     kprintf("\r\nYou entered (string): ");
     write(STDOUT_FILENO, str_buf, 0, FMT_STRING);
     break;
   case 2:  // Integer
-    read(STDIN_FILENO, &int_val, sizeof(int_val), FMT_INT);
+    while (read(STDIN_FILENO, &int_val, sizeof(int_val), FMT_INT) == 0);
     kprintf("\r\nYou entered (int): ");
     write(STDOUT_FILENO, &int_val, 0, FMT_INT);
     break;
   case 3:  // Float
-    read(STDIN_FILENO, &float_val, sizeof(float_val), FMT_FLOAT);
+    while (read(STDIN_FILENO, &float_val, sizeof(float_val), FMT_FLOAT) == 0);
     kprintf("\r\nYou entered (float): ");
     write(STDOUT_FILENO, &float_val, 0, FMT_FLOAT);
     break;
   case 4:  // Hex
-    read(STDIN_FILENO, &hex_val, sizeof(hex_val), FMT_HEX);
+    while (read(STDIN_FILENO, &hex_val, sizeof(hex_val), FMT_HEX) == 0);
     kprintf("\r\nYou entered (hex): 0x");
     write(STDOUT_FILENO, &hex_val, 0, FMT_HEX);
     break;
   case 5:  // Octal
-    read(STDIN_FILENO, &oct_val, sizeof(oct_val), FMT_OCTAL);
+    while (read(STDIN_FILENO, &oct_val, sizeof(oct_val), FMT_OCTAL) == 0);
     kprintf("\r\nYou entered (octal): ");
     write(STDOUT_FILENO, &oct_val, 0, FMT_OCTAL);
     break;
   case 6:  // Char
-    read(STDIN_FILENO, &char_val, sizeof(char_val), FMT_CHAR);
+    while (read(STDIN_FILENO, &char_val, sizeof(char_val), FMT_CHAR) == 0);
     kprintf("\r\nYou entered (char): ");
     write(STDOUT_FILENO, &char_val, 0, FMT_CHAR);
     break;

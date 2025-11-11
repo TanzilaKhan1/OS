@@ -57,31 +57,94 @@ uint32_t syscall_dispatch(uint16_t callno, uint32_t a0, uint32_t a1,
       return 0U;
     }
 
-    // Formatted input using kscanf
+    // NON-BLOCKING formatted input using accumulator pattern
+    // SVC handler remains SHORT and NON-BLOCKING per ARM best practices
     switch (fmt) {
     case FMT_STRING:  // String (%s)
-      kscanf("%s", (char *)buf);
-      return __strlen((uint8_t *)buf);
+    case FMT_INT:     // Integer (%d)
+    case FMT_FLOAT:   // Float (%f)
+    case FMT_HEX:     // Hexadecimal (%x)
+    case FMT_OCTAL:   // Octal (%o)
+    case FMT_CHAR: {  // Character (%c)
+      // Try to accumulate a complete line of input (bounded operation)
+      // accumulate_input_line has internal iteration limit to prevent indefinite wait
+      int status = accumulate_input_line();
 
-    case FMT_INT:  // Integer (%d)
-      kscanf("%d", (int *)buf);
-      return sizeof(int);
+      if (status == 0) {
+        // Incomplete input - return 0 to indicate "would block" / "not ready"
+        // Upper layers (application/userspace) should retry if needed
+        // This keeps SVC handler fast and non-blocking
+        return 0U;
+      }
 
-    case FMT_FLOAT:  // Float (%f)
-      kscanf("%f", (float *)buf);
-      return sizeof(float);
+      if (status < 0) {
+        // Error occurred
+        return 0U;
+      }
 
-    case FMT_HEX:  // Hexadecimal (%x)
-      kscanf("%x", (uint32_t *)buf);
-      return sizeof(uint32_t);
+      // Status == 1: Complete line available
+      uint8_t *input = get_accumulated_input();
+      uint32_t result_size = 0U;
 
-    case FMT_OCTAL:  // Octal (%o)
-      kscanf("%o", (uint32_t *)buf);
-      return sizeof(uint32_t);
+      // Parse the accumulated input based on format
+      switch (fmt) {
+      case FMT_STRING: {
+        // Copy string to user buffer
+        uint32_t input_len = __strlen(input);
+        if (input_len > 0U) {
+          uint32_t copy_len = (len > input_len) ? input_len : len - 1U;
+          for (uint32_t i = 0; i < copy_len; i++) {
+            ((char *)buf)[i] = input[i];
+          }
+          ((char *)buf)[copy_len] = '\0';
+          result_size = copy_len;
+        } else {
+          ((char *)buf)[0] = '\0';
+          result_size = 0U;
+        }
+        break;
+      }
 
-    case FMT_CHAR:  // Character (%c)
-      kscanf("%c", (char *)buf);
-      return sizeof(char);
+      case FMT_INT:
+        *(int *)buf = __str_to_num(input, 10);
+        result_size = sizeof(int);
+        break;
+
+      case FMT_FLOAT: {
+        extern float str2float(uint8_t *);
+        *(float *)buf = str2float(input);
+        result_size = sizeof(float);
+        break;
+      }
+
+      case FMT_HEX:
+        *(uint32_t *)buf = __str_to_num(input, 16);
+        result_size = sizeof(uint32_t);
+        break;
+
+      case FMT_OCTAL:
+        *(uint32_t *)buf = __str_to_num(input, 8);
+        result_size = sizeof(uint32_t);
+        break;
+
+      case FMT_CHAR:
+        if (__strlen(input) > 0U) {
+          *(char *)buf = (char)input[0];
+        } else {
+          *(char *)buf = '\0';
+        }
+        result_size = sizeof(char);
+        break;
+
+      default:
+        result_size = 0U;
+        break;
+      }
+
+      // Reset accumulator for next input
+      reset_input_accumulator();
+      return result_size;
+    }
 
     case FMT_RAW:  // Raw bytes (default, backward compatible)
     default:

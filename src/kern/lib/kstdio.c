@@ -220,35 +220,43 @@ uint32_t read_available_nonblocking(uint8_t *buff, size_t max_len) {
 
 
 
-// Helper function for kscanf: poll for complete line using non-blocking reads
+// Maximum iterations to check for data before returning (prevents busy-waiting)
+#define MAX_POLL_ITERATIONS 1000U
+
+// TRULY NON-BLOCKING - reads ONLY available data with iteration limit
+// Returns immediately with whatever is available right now
 // Returns number of bytes read (NOT including newline - newline is removed)
+// IMPORTANT: This function will NOT wait for newline if max iterations reached
 static uint32_t kscanf_poll_line(uint8_t *buff, size_t max_len) {
   uint32_t count = 0U;
-  uint32_t loop_iterations = 0U;
-  uint32_t max_iterations = 100000U;  // Timeout after ~100K iterations
+  uint32_t iterations = 0U;
 
-  while (count < (max_len - 1U)) {
-    // Timeout protection
-    if (loop_iterations++ > max_iterations) {
-      kprintf("\r\n[TIMEOUT in kscanf_poll_line, count=%d]\r\n", count);
-      break;
-    }
+  // Read ONLY currently available characters - LIMITED POLLING
+  // Exit if: (1) buffer full, (2) newline received, (3) max iterations reached
+  while (count < (max_len - 1U) && iterations < MAX_POLL_ITERATIONS) {
 
-    // Check if data available
+    // Check if data available - but don't wait forever
     if (IsDataAvailable(__CONSOLE) <= 0) {
-      // Small delay before retry
-      for (volatile uint32_t i = 0; i < 1000; i++);
+      iterations++;
+      // Return immediately if we've checked enough times and have no data
+      if (iterations >= MAX_POLL_ITERATIONS && count == 0U) {
+        break;  // No data available after max iterations
+      }
+      // If we have some data but no newline yet, return what we have
+      if (count > 0U && iterations >= MAX_POLL_ITERATIONS / 10U) {
+        break;  // Return partial data rather than wait
+      }
       continue;
     }
 
     int c = Uart_read(__CONSOLE);
     if (c < 0) {
-      kprintf("\r\n[Uart_read returned -1]\r\n");
+      iterations++;
       continue;
     }
 
-    // DEBUG: Print character code
-    kprintf("[char=0x%x] ", (uint8_t)c);
+    // Reset iteration counter when we successfully read data
+    iterations = 0U;
 
     // Handle backspace
     if ((uint8_t)c == 0x08U || (uint8_t)c == 0x7FU) {
@@ -265,15 +273,15 @@ static uint32_t kscanf_poll_line(uint8_t *buff, size_t max_len) {
     if ((uint8_t)c == '\r' || (uint8_t)c == '\n') {
       Uart_write('\r', __CONSOLE);
       Uart_write('\n', __CONSOLE);
-      kprintf("[GOT NEWLINE, breaking]\r\n");
 
-      // Consume any remaining newline character (handle \r\n or \n\r)
-      for (volatile uint32_t i = 0; i < 1000; i++);
+      // Consume paired newline if immediately available (no waiting!)
       if (IsDataAvailable(__CONSOLE) > 0) {
-        int next_c = Uart_read(__CONSOLE);
-        kprintf("[consumed next_c=0x%x]\r\n", (uint8_t)next_c);
+        int next_c = Uart_peek(__CONSOLE);
+        if (next_c >= 0 && ((uint8_t)next_c == '\r' || (uint8_t)next_c == '\n')) {
+          Uart_read(__CONSOLE);
+        }
       }
-      break;
+      break;  // Done with this line
     }
 
     // Echo and store normal character
@@ -282,191 +290,163 @@ static uint32_t kscanf_poll_line(uint8_t *buff, size_t max_len) {
   }
 
   buff[count] = '\0';
-  kprintf("[kscanf_poll_line returning, count=%d, buf='%s']\r\n", count, buff);
   return count;
+}
+
+// Input accumulator state for non-blocking formatted input
+typedef struct {
+  uint8_t buffer[256];     // Accumulated input buffer
+  uint32_t count;          // Current position in buffer
+  uint8_t line_complete;   // Flag: 1 if newline received, 0 otherwise
+} input_accumulator_t;
+
+// Static accumulator for formatted input (one per system)
+static input_accumulator_t g_input_accum = {0};
+
+// NON-BLOCKING input accumulator - builds up a complete line over multiple calls
+// Returns: 0 = no complete line yet, 1 = line complete and ready, -1 = error
+// When returns 1, the complete line (without newline) is in the accumulator buffer
+int accumulate_input_line(void) {
+  // If we already have a complete line, return success immediately
+  if (g_input_accum.line_complete) {
+    return 1;
+  }
+
+  // Read available data without blocking
+  uint32_t iterations = 0U;
+  while (g_input_accum.count < sizeof(g_input_accum.buffer) - 1U &&
+         iterations < 100U) {  // Limit iterations to prevent blocking
+
+    // Check if data available
+    if (IsDataAvailable(__CONSOLE) <= 0) {
+      iterations++;
+      if (iterations >= 100U) {
+        return 0;  // No complete line yet, but not an error
+      }
+      continue;
+    }
+
+    int c = Uart_read(__CONSOLE);
+    if (c < 0) {
+      iterations++;
+      continue;
+    }
+
+    // Reset iteration counter when we read data
+    iterations = 0U;
+
+    // Handle backspace
+    if ((uint8_t)c == 0x08U || (uint8_t)c == 0x7FU) {
+      if (g_input_accum.count > 0U) {
+        g_input_accum.count--;
+        Uart_write('\b', __CONSOLE);
+        Uart_write(' ', __CONSOLE);
+        Uart_write('\b', __CONSOLE);
+      }
+      continue;
+    }
+
+    // Handle newline - line is complete!
+    if ((uint8_t)c == '\r' || (uint8_t)c == '\n') {
+      Uart_write('\r', __CONSOLE);
+      Uart_write('\n', __CONSOLE);
+
+      // Consume paired newline if available
+      if (IsDataAvailable(__CONSOLE) > 0) {
+        int next_c = Uart_peek(__CONSOLE);
+        if (next_c >= 0 && ((uint8_t)next_c == '\r' || (uint8_t)next_c == '\n')) {
+          Uart_read(__CONSOLE);
+        }
+      }
+
+      // Mark line as complete
+      g_input_accum.buffer[g_input_accum.count] = '\0';
+      g_input_accum.line_complete = 1U;
+      return 1;  // Complete line ready
+    }
+
+    // Echo and store normal character
+    Uart_write((uint8_t)c, __CONSOLE);
+    g_input_accum.buffer[g_input_accum.count++] = (uint8_t)c;
+  }
+
+  // Buffer full but no newline - treat as complete
+  if (g_input_accum.count >= sizeof(g_input_accum.buffer) - 1U) {
+    g_input_accum.buffer[g_input_accum.count] = '\0';
+    g_input_accum.line_complete = 1U;
+    return 1;
+  }
+
+  return 0;  // Incomplete, need more data
+}
+
+// Reset the input accumulator (call after consuming accumulated input)
+void reset_input_accumulator(void) {
+  g_input_accum.count = 0U;
+  g_input_accum.line_complete = 0U;
+  g_input_accum.buffer[0] = '\0';
+}
+
+// Get pointer to accumulated input buffer (for parsing)
+uint8_t* get_accumulated_input(void) {
+  return g_input_accum.buffer;
 }
 
 // Simplified version of scanf - NOW USES NON-BLOCKING I/O
 // Safe to use from kernel code, polls internally until input complete
-void kscanf(char *format, ...) {
-  va_list list;
-  char *ptr;
-  uint8_t buff[256];  // Reduced from 1024 to avoid stack overflow in SVC handler
-  uint8_t *str;
-
-  ptr = format;
-  va_start(list, format);
-
-  while (*ptr) {
-    if (*ptr == '%') {
-      ptr++;
-      switch (*ptr) {
-      case 'c': { // character - poll for single char
-        uint8_t ch = 0;
-        while (1) {
-          if (IsDataAvailable(__CONSOLE) <= 0) {
-            for (volatile uint32_t i = 0; i < 1000; i++);
-            continue;
-          }
-
-          int c = Uart_read(__CONSOLE);
-          if (c < 0) {
-            continue;
-          }
-
-          ch = (uint8_t)c;
-
-          // Echo character
-          if (ch == '\r' || ch == '\n') {
-            Uart_write('\r', __CONSOLE);
-            Uart_write('\n', __CONSOLE);
-          } else if (ch == 0x08U || ch == 0x7FU) {
-            Uart_write('\b', __CONSOLE);
-            Uart_write(' ', __CONSOLE);
-            Uart_write('\b', __CONSOLE);
-          } else {
-            Uart_write(ch, __CONSOLE);
-          }
-          break;
-        }
-        *(uint8_t *)va_arg(list, uint8_t *) = ch;
-        break;
-      }
-      case 'd': { // integer number
-        kscanf_poll_line(buff, sizeof(buff));
-        uint8_t numtok[50];
-        uint32_t i = 0U, j = 0U;
-
-        // Skip leading whitespace
-        while (buff[i] == ' ' || buff[i] == '\t' || buff[i] == '\r' ||
-               buff[i] == '\n') {
-          i++;
-        }
-
-        // Optional sign
-        if (buff[i] == '-' || buff[i] == '+') {
-          if (j < sizeof(numtok) - 1U && buff[i] == '-') {
-            numtok[j++] = '-';
-          }
-          i++;
-        }
-
-        // Digits
-        while (buff[i] >= '0' && buff[i] <= '9') {
-          if (j >= sizeof(numtok) - 1U) {
-            break;
-          }
-          numtok[j++] = buff[i++];
-        }
-        numtok[j] = '\0';
-        *(uint32_t *)va_arg(list, uint32_t *) = __str_to_num(numtok, 10);
-        break;
-      }
-      case 's': { // string (read entire line, including spaces)
-        kscanf_poll_line(buff, sizeof(buff));
-        str = (uint8_t *)va_arg(list, uint8_t *);
-        uint32_t i = 0U;
-
-        // Copy string, removing trailing newline
-        while (buff[i] != '\0' && buff[i] != '\r' && buff[i] != '\n') {
-          str[i] = buff[i];
-          i++;
-        }
-        str[i] = '\0';
-        break;
-      }
-      case 'x': { // hexadecimal number
-        kscanf_poll_line(buff, sizeof(buff));
-        uint8_t hextok[50];
-        uint32_t i = 0U, j = 0U;
-
-        // Skip leading whitespace
-        while (buff[i] == ' ' || buff[i] == '\t' || buff[i] == '\r' ||
-               buff[i] == '\n') {
-          i++;
-        }
-
-        // Skip optional 0x prefix
-        if (buff[i] == '0' && (buff[i + 1] == 'x' || buff[i + 1] == 'X')) {
-          i += 2;
-        }
-
-        // Hex digits
-        while ((buff[i] >= '0' && buff[i] <= '9') ||
-               (buff[i] >= 'a' && buff[i] <= 'f') ||
-               (buff[i] >= 'A' && buff[i] <= 'F')) {
-          if (j >= sizeof(hextok) - 1U) {
-            break;
-          }
-          hextok[j++] = buff[i++];
-        }
-        hextok[j] = '\0';
-        *(uint32_t *)va_arg(list, uint32_t *) = __str_to_num(hextok, 16);
-        break;
-      }
-      case 'o': { // octal number
-        kscanf_poll_line(buff, sizeof(buff));
-        uint8_t octtok[50];
-        uint32_t i = 0U, j = 0U;
-
-        // Skip leading whitespace
-        while (buff[i] == ' ' || buff[i] == '\t' || buff[i] == '\r' ||
-               buff[i] == '\n') {
-          i++;
-        }
-
-        // Octal digits
-        while (buff[i] >= '0' && buff[i] <= '7') {
-          if (j >= sizeof(octtok) - 1U) {
-            break;
-          }
-          octtok[j++] = buff[i++];
-        }
-        octtok[j] = '\0';
-        *(uint32_t *)va_arg(list, uint32_t *) = __str_to_num(octtok, 8);
-        break;
-      }
-      case 'f': { // floating point number
-        kscanf_poll_line(buff, sizeof(buff));
-        uint8_t floattok[50];
-        uint32_t i = 0U, j = 0U;
-        uint8_t neg = 0U;
-
-        // Skip leading whitespace
-        while (buff[i] == ' ' || buff[i] == '\t' || buff[i] == '\r' ||
-               buff[i] == '\n') {
-          i++;
-        }
-
-        // Optional sign
-        if (buff[i] == '-') {
-          neg = 1U;
-          i++;
-        } else if (buff[i] == '+') {
-          i++;
-        }
-
-        // Digits and decimal point
-        while ((buff[i] >= '0' && buff[i] <= '9') || buff[i] == '.') {
-          if (j >= sizeof(floattok) - 1U) {
-            break;
-          }
-          floattok[j++] = buff[i++];
-        }
-        floattok[j] = '\0';
-
-        float fv = str2float(floattok);
-        if (neg) {
-          fv = -fv;
-        }
-        *(float *)va_arg(list, float *) = fv;
-        break;
-      }
-      default:
-        break;
-      }
-    }
-    ptr++;
-  }
-  va_end(list);
+// Simplified version of scanf
+void kscanf(char *format,...)
+{
+//write your code here
+	va_list list;
+	char *ptr;
+	uint8_t buff[50];
+	uint8_t *str;
+	int len;
+	ptr=format;
+	va_start(list,format);
+	while (*ptr)
+	{
+		if(*ptr == '%') //looking for format of an input
+		{
+			ptr++;
+			switch (*ptr)
+			{
+			case 'c': //character
+				// Use non-blocking poll to read one character
+				if (kscanf_poll_line(buff, 2) > 0) {
+					*(uint8_t*)va_arg(list,uint8_t*) = buff[0];
+				} else {
+					*(uint8_t*)va_arg(list,uint8_t*) = 0;
+				}
+				break;
+			case 'd': //integer number
+				kscanf_poll_line(buff, 50);  // Read input first!
+				*(uint32_t*)va_arg(list,uint32_t*)=__str_to_num(buff,10);
+				break;
+			case 's': //string without spaces
+				len = kscanf_poll_line(buff, 50);  // Read input first!
+				str = va_arg(list,uint8_t*);
+				for(int u = 0; u<=len; u++)	// copy from buff to user defined char pointer (i.e string)
+					str[u] = buff[u];
+				break;
+			case 'x': //hexadecimal number
+				kscanf_poll_line(buff, 50);  // Read input first!
+				*(int*)va_arg(list,uint32_t*)=__str_to_num(buff,16);
+				break;
+			case 'o': //octal number
+				kscanf_poll_line(buff, 50);  // Read input first!
+				*(uint32_t*)va_arg(list,uint32_t*)=__str_to_num(buff,8);
+				break;
+			case 'f': //floating point number
+				kscanf_poll_line(buff, 50);  // Read input first!
+				*(float*)va_arg(list,float*) = str2float(buff);	// Works for float but not for double !!!
+				break;
+			default: //rest not recognized
+				break;
+			}
+		}
+		ptr++;
+	}
+	va_end(list);
 }

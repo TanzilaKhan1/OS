@@ -45,4 +45,15 @@ uint32_t read_string_syscall(uint8_t *buff, size_t max_len);
 // NON-BLOCKING version - for use in SYS_read syscall handler
 // Reads only available data, returns immediately if nothing available
 uint32_t read_available_nonblocking(uint8_t *buff, size_t max_len);
+
+// NON-BLOCKING input accumulator for formatted I/O
+// Returns: 0 = incomplete, 1 = complete line ready, -1 = error
+int accumulate_input_line(void);
+
+// Reset input accumulator (call after consuming input)
+void reset_input_accumulator(void);
+
+// Get pointer to accumulated input buffer
+uint8_t* get_accumulated_input(void);
+
 #endif /* KSTDIO */
