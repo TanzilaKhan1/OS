@@ -220,43 +220,25 @@ uint32_t read_available_nonblocking(uint8_t *buff, size_t max_len) {
 
 
 
-// Maximum iterations to check for data before returning (prevents busy-waiting)
-#define MAX_POLL_ITERATIONS 1000U
-
-// TRULY NON-BLOCKING - reads ONLY available data with iteration limit
+// TRULY NON-BLOCKING - reads ONLY currently available data, NO WAITING
 // Returns immediately with whatever is available right now
 // Returns number of bytes read (NOT including newline - newline is removed)
-// IMPORTANT: This function will NOT wait for newline if max iterations reached
 static uint32_t kscanf_poll_line(uint8_t *buff, size_t max_len) {
   uint32_t count = 0U;
-  uint32_t iterations = 0U;
 
-  // Read ONLY currently available characters - LIMITED POLLING
-  // Exit if: (1) buffer full, (2) newline received, (3) max iterations reached
-  while (count < (max_len - 1U) && iterations < MAX_POLL_ITERATIONS) {
+  // Read ONLY currently available characters - NO POLLING/WAITING
+  // Exit if: (1) buffer full, (2) newline received, (3) no more data available
+  while (count < (max_len - 1U)) {
 
-    // Check if data available - but don't wait forever
+    // Check if data available - if not, return immediately
     if (IsDataAvailable(__CONSOLE) <= 0) {
-      iterations++;
-      // Return immediately if we've checked enough times and have no data
-      if (iterations >= MAX_POLL_ITERATIONS && count == 0U) {
-        break;  // No data available after max iterations
-      }
-      // If we have some data but no newline yet, return what we have
-      if (count > 0U && iterations >= MAX_POLL_ITERATIONS / 10U) {
-        break;  // Return partial data rather than wait
-      }
-      continue;
+      break;  // No data available, return what we have
     }
 
     int c = Uart_read(__CONSOLE);
     if (c < 0) {
-      iterations++;
-      continue;
+      break;  // No data, exit immediately
     }
-
-    // Reset iteration counter when we successfully read data
-    iterations = 0U;
 
     // Handle backspace
     if ((uint8_t)c == 0x08U || (uint8_t)c == 0x7FU) {
@@ -313,27 +295,26 @@ int accumulate_input_line(void) {
   }
 
   // Read available data without blocking
-  uint32_t iterations = 0U;
-  while (g_input_accum.count < sizeof(g_input_accum.buffer) - 1U &&
-         iterations < 100U) {  // Limit iterations to prevent blocking
+  // Process ALL currently available characters (don't retry/wait)
+  uint32_t max_chars = 50U;  // Limit to prevent processing too much in one call
+  uint32_t chars_read = 0U;
 
-    // Check if data available
+  while (g_input_accum.count < sizeof(g_input_accum.buffer) - 1U &&
+         chars_read < max_chars) {
+
+    // Check if data available - if not, return immediately (no waiting!)
     if (IsDataAvailable(__CONSOLE) <= 0) {
-      iterations++;
-      if (iterations >= 100U) {
-        return 0;  // No complete line yet, but not an error
-      }
-      continue;
+      return 0;  // No more data available right now, return immediately
     }
 
     int c = Uart_read(__CONSOLE);
     if (c < 0) {
-      iterations++;
-      continue;
+      // No data even though IsDataAvailable said there was - just return
+      return 0;
     }
 
-    // Reset iteration counter when we read data
-    iterations = 0U;
+    // Count characters read
+    chars_read++;
 
     // Handle backspace
     if ((uint8_t)c == 0x08U || (uint8_t)c == 0x7FU) {
@@ -463,27 +444,21 @@ int kscanf_nonblocking(char *format, va_list list) {
   return 1;  // Success
 }
 
-// NON-BLOCKING version of kscanf with BOUNDED retry attempts
-// Safe to call from SVC handlers - will NOT block indefinitely
-// Returns: number of items successfully read, or 0 if would block
+// NON-BLOCKING version of kscanf - returns IMMEDIATELY if no data ready
+// Safe to call from SVC handlers - will NOT block or starve interrupts
+// Returns: 1 if successful, 0 if would block (no complete input yet)
 // This is the main kscanf function that should be used everywhere
 int kscanf(char *format, ...) {
   va_list list;
   va_start(list, format);
 
-  // Try to get input with BOUNDED retries (prevents indefinite blocking)
-  // This makes kscanf safe to use from syscall handlers
-  int result;
-  uint32_t max_retries = 1000U;  // Maximum retry attempts
-  uint32_t retry_count = 0U;
-
-  while ((result = kscanf_nonblocking(format, list)) == 0 && retry_count < max_retries) {
-    // Input not ready yet, retry with bounded limit
-    retry_count++;
-  }
+  // Call non-blocking variant ONCE - no retries in syscall handler!
+  // This allows interrupts (UART TX, timers, etc.) to fire between syscalls
+  // Application layer handles retries if needed
+  int result = kscanf_nonblocking(format, list);
 
   va_end(list);
 
-  // Return 1 if successful, 0 if timed out (no complete input)
+  // Return 1 if successful, 0 if no complete input yet
   return (result == 1) ? 1 : 0;
 }
