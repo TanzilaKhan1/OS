@@ -37,27 +37,58 @@
 
 static uint8_t __outbuf[50];
 
+// Helper function to check if a character is valid for the given base
+static int is_valid_digit(uint8_t c, uint8_t base) {
+  if (c >= '0' && c <= '9') {
+    return (c - '0') < base;
+  }
+  if (base == 16) {
+    if (c >= 'a' && c <= 'f') return 1;
+    if (c >= 'A' && c <= 'F') return 1;
+  }
+  return 0;
+}
+
 int __str_to_num(uint8_t *buff, uint8_t base) {
   uint8_t sign = 0;
   int decimal = 0;
   uint32_t val;
+  uint32_t i = 0;
+
   if (buff[0] == '-') {
     sign = 1;
-    buff[0] = '0';
+    buff++;
   }
-  __reverse_str(buff);
-  uint32_t i = 0;
-  while (buff[i]) {
+
+  // First pass: validate and find where to stop (at '.' or invalid char)
+  uint32_t valid_len = 0;
+  while (buff[valid_len] != '\0' && buff[valid_len] != '.') {
+    if (!is_valid_digit(buff[valid_len], base)) {
+      // Invalid character found, stop here
+      break;
+    }
+    valid_len++;
+  }
+
+  // If no valid digits, return 0
+  if (valid_len == 0) {
+    return 0;
+  }
+
+  // Parse only the valid digits
+  for (i = 0; i < valid_len; i++) {
     if (buff[i] >= '0' && buff[i] <= '9') {
       val = (uint32_t)(buff[i] - '0');
     } else if (buff[i] >= 'a' && buff[i] <= 'f') {
       val = (uint32_t)(buff[i] - 97 + 10);
     } else if (buff[i] >= 'A' && buff[i] <= 'F') {
       val = (uint32_t)(buff[i] - 65 + 10);
+    } else {
+      break;
     }
-    decimal += val * __pow(base, i);
-    i++;
+    decimal = decimal * base + val;
   }
+
   if (sign)
     decimal = decimal * -1;
   return decimal;
@@ -132,7 +163,76 @@ uint8_t *float2str(float f) {
   } while (d != 0);
   return (ptr);
 }
+// Validate if string is valid for integer parsing
+// For base 10: allows digits, optional leading '-', and stops at '.'
+// Returns: 1 if valid (has at least one valid digit), 0 if completely invalid
+int is_valid_int_str(uint8_t *buff, uint8_t base) {
+  uint32_t i = 0;
+  uint8_t has_digit = 0;
+
+  // Handle optional negative sign
+  if (buff[0] == '-') {
+    i = 1;
+  }
+
+  // Must have at least one character after optional sign
+  if (buff[i] == '\0') {
+    return 0;
+  }
+
+  // Check characters until we hit '.', null terminator, or invalid char
+  while (buff[i] != '\0' && buff[i] != '.') {
+    if (is_valid_digit(buff[i], base)) {
+      has_digit = 1;
+    } else {
+      // Found an invalid character before '.' or end
+      return 0;
+    }
+    i++;
+  }
+
+  // Valid if we found at least one digit
+  return has_digit;
+}
+
+// Validate if string contains only valid float characters (digits, decimal point, optional sign)
+// Returns: 1 if valid, 0 if invalid
+int is_valid_float_str(uint8_t *buff) {
+  uint32_t i = 0;
+  uint8_t decimal_count = 0;
+
+  // Handle optional negative sign
+  if (buff[0] == '-') {
+    i = 1;
+  }
+
+  // Must have at least one character after optional sign
+  if (buff[i] == '\0') {
+    return 0;
+  }
+
+  // Check each character
+  while (buff[i] != '\0') {
+    if (buff[i] == '.') {
+      decimal_count++;
+      if (decimal_count > 1) {
+        return 0;  // Multiple decimal points
+      }
+    } else if (buff[i] < '0' || buff[i] > '9') {
+      return 0;  // Invalid character
+    }
+    i++;
+  }
+
+  return 1;  // Valid float string
+}
+
 float str2float(uint8_t *buff) {
+  // Validate input first
+  if (!is_valid_float_str(buff)) {
+    return 0.0f;  // Return 0 for invalid input
+  }
+
   float f = 0;
   // first add the fractional part
   uint32_t i = 0;

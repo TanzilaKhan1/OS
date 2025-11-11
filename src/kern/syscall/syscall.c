@@ -67,27 +67,44 @@ uint32_t syscall_dispatch(uint16_t callno, uint32_t a0, uint32_t a1,
       result = kscanf("%s", (char *)buf);
       if (result > 0) {
         bytes_read = __strlen((uint8_t *)buf);
+      } else if (result < 0) {
+        kprintf("\r\nInvalid input! Please try again.\r\n");
       }
-      return bytes_read;
+      return (result > 0) ? bytes_read : 0U;
 
     case FMT_INT:  // Integer (%d)
       result = kscanf("%d", (int *)buf);
+      if (result < 0) {
+        kprintf("\r\nInvalid input! Please enter a valid integer: ");
+      }
       return (result > 0) ? sizeof(int) : 0U;
 
     case FMT_FLOAT:  // Float (%f)
       result = kscanf("%f", (float *)buf);
+      if (result < 0) {
+        kprintf("\r\nInvalid input! Please enter a valid float: ");
+      }
       return (result > 0) ? sizeof(float) : 0U;
 
     case FMT_HEX:  // Hexadecimal (%x)
       result = kscanf("%x", (uint32_t *)buf);
+      if (result < 0) {
+        kprintf("\r\nInvalid input! Please enter a valid hexadecimal: ");
+      }
       return (result > 0) ? sizeof(uint32_t) : 0U;
 
     case FMT_OCTAL:  // Octal (%o)
       result = kscanf("%o", (uint32_t *)buf);
+      if (result < 0) {
+        kprintf("\r\nInvalid input! Please enter a valid octal number: ");
+      }
       return (result > 0) ? sizeof(uint32_t) : 0U;
 
     case FMT_CHAR:  // Character (%c)
       result = kscanf("%c", (char *)buf);
+      if (result < 0) {
+        kprintf("\r\nInvalid input!\r\n");
+      }
       return (result > 0) ? sizeof(char) : 0U;
 
     case FMT_RAW:  // Raw bytes (default, backward compatible)
@@ -100,6 +117,7 @@ uint32_t syscall_dispatch(uint16_t callno, uint32_t a0, uint32_t a1,
       }
       // Use non-blocking version for raw I/O
       uint32_t count = read_available_nonblocking((uint8_t *)buf, len);
+      
       return count;
     }
   }

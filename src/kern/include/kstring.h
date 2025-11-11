@@ -44,6 +44,8 @@ uint8_t *convert(int, uint8_t);
 uint8_t *convertu32(uint32_t, uint8_t);
 uint8_t *float2str(float);
 float str2float(uint8_t *);
+int is_valid_float_str(uint8_t *);
+int is_valid_int_str(uint8_t *, uint8_t);
 void *kmemset(void *, uint8_t, size_t);
 void StrCat(char *, char *);
 void strcopy(uint8_t *, const uint8_t *);

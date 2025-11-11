@@ -118,57 +118,58 @@ void putstr(const uint8_t *str, size_t size) {
   }
 }
 
-// BLOCKING version - Legacy function, kept for compatibility
-// WARNING: DO NOT call from syscall handlers (SVC) - will block indefinitely!
-// NOTE: kscanf now uses non-blocking I/O, this function rarely needed
+
+
+
+// BLOCKING version
+// WARNING: DO NOT call from syscall handlers (SVC) 
 // Returns count of bytes read (excluding null terminator)
-// uint32_t read_string_syscall(uint8_t *buff, size_t max_len) {
-//   uint32_t count = 0U;
+uint32_t read_string_syscall(uint8_t *buff, size_t max_len) {
+  uint32_t count = 0U;
 
-//   if (buff == 0 || max_len == 0U) {
-//     return 0U;
-//   }
+  if (buff == 0 || max_len == 0U) {
+    return 0U;
+  }
 
-//   while (count < (max_len - 1U)) {
-//     // BLOCKING: wait for data
-//     while (IsDataAvailable(__CONSOLE) <= 0);
+  while (count < (max_len - 1U)) {
+    // BLOCKING: wait for data
+    while (IsDataAvailable(__CONSOLE) <= 0);
 
-//     int c = Uart_read(__CONSOLE);
-//     if (c < 0) {
-//       continue;
-//     }
+    int c = Uart_read(__CONSOLE);
+    if (c < 0) {
+      continue;
+    }
 
-//     // Handle backspace/delete
-//     if ((uint8_t)c == 0x08U || (uint8_t)c == 0x7FU) {
-//       if (count > 0U) {
-//         count--;
-//         Uart_write('\b', __CONSOLE);
-//         Uart_write(' ', __CONSOLE);
-//         Uart_write('\b', __CONSOLE);
-//       }
-//       continue;
-//     }
+    // Handle backspace/delete
+    if ((uint8_t)c == 0x08U || (uint8_t)c == 0x7FU) {
+      if (count > 0U) {
+        count--;
+        Uart_write('\b', __CONSOLE);
+        Uart_write(' ', __CONSOLE);
+        Uart_write('\b', __CONSOLE);
+      }
+      continue;
+    }
 
-//     // Handle newline - end input
-//     if ((uint8_t)c == '\n' || (uint8_t)c == '\r') {
-//       Uart_write('\r', __CONSOLE);
-//       Uart_write('\n', __CONSOLE);
-//       break;
-//     }
+    // Handle newline - end input
+    if ((uint8_t)c == '\n' || (uint8_t)c == '\r') {
+      Uart_write('\r', __CONSOLE);
+      Uart_write('\n', __CONSOLE);
+      break;
+    }
 
-//     // Echo and store normal character
-//     Uart_write((uint8_t)c, __CONSOLE);
-//     buff[count++] = (uint8_t)c;
-//   }
+    // Echo and store normal character
+    Uart_write((uint8_t)c, __CONSOLE);
+    buff[count++] = (uint8_t)c;
+  }
 
-//   buff[count] = '\0';
-//   return count;
-// }
+  buff[count] = '\0';
+  return count;
+}
 
-// NON-BLOCKING version - For use in syscall handlers (SYS_read)
+
 // Reads only available characters without waiting
 // Returns count of bytes read, or 0 if no data available
-// NO ECHO - application is responsible for echo if needed
 uint32_t read_available_nonblocking(uint8_t *buff, size_t max_len) {
   uint32_t count = 0U;
 
@@ -219,62 +220,6 @@ uint32_t read_available_nonblocking(uint8_t *buff, size_t max_len) {
 }
 
 
-
-// TRULY NON-BLOCKING - reads ONLY currently available data, NO WAITING
-// Returns immediately with whatever is available right now
-// Returns number of bytes read (NOT including newline - newline is removed)
-static uint32_t kscanf_poll_line(uint8_t *buff, size_t max_len) {
-  uint32_t count = 0U;
-
-  // Read ONLY currently available characters - NO POLLING/WAITING
-  // Exit if: (1) buffer full, (2) newline received, (3) no more data available
-  while (count < (max_len - 1U)) {
-
-    // Check if data available - if not, return immediately
-    if (IsDataAvailable(__CONSOLE) <= 0) {
-      break;  // No data available, return what we have
-    }
-
-    int c = Uart_read(__CONSOLE);
-    if (c < 0) {
-      break;  // No data, exit immediately
-    }
-
-    // Handle backspace
-    if ((uint8_t)c == 0x08U || (uint8_t)c == 0x7FU) {
-      if (count > 0U) {
-        count--;
-        Uart_write('\b', __CONSOLE);
-        Uart_write(' ', __CONSOLE);
-        Uart_write('\b', __CONSOLE);
-      }
-      continue;
-    }
-
-    // Handle newline - end input
-    if ((uint8_t)c == '\r' || (uint8_t)c == '\n') {
-      Uart_write('\r', __CONSOLE);
-      Uart_write('\n', __CONSOLE);
-
-      // Consume paired newline if immediately available (no waiting!)
-      if (IsDataAvailable(__CONSOLE) > 0) {
-        int next_c = Uart_peek(__CONSOLE);
-        if (next_c >= 0 && ((uint8_t)next_c == '\r' || (uint8_t)next_c == '\n')) {
-          Uart_read(__CONSOLE);
-        }
-      }
-      break;  // Done with this line
-    }
-
-    // Echo and store normal character
-    Uart_write((uint8_t)c, __CONSOLE);
-    buff[count++] = (uint8_t)c;
-  }
-
-  buff[count] = '\0';
-  return count;
-}
-
 // Input accumulator state for non-blocking formatted input
 typedef struct {
   uint8_t buffer[256];     // Accumulated input buffer
@@ -285,6 +230,8 @@ typedef struct {
 // Static accumulator for formatted input (one per system)
 static input_accumulator_t g_input_accum = {0};
 
+
+
 // NON-BLOCKING input accumulator - builds up a complete line over multiple calls
 // Returns: 0 = no complete line yet, 1 = line complete and ready, -1 = error
 // When returns 1, the complete line (without newline) is in the accumulator buffer
@@ -294,7 +241,6 @@ int accumulate_input_line(void) {
     return 1;
   }
 
-  // Read available data without blocking
   // Process ALL currently available characters (don't retry/wait)
   uint32_t max_chars = 50U;  // Limit to prevent processing too much in one call
   uint32_t chars_read = 0U;
@@ -374,7 +320,7 @@ uint8_t* get_accumulated_input(void) {
 }
 
 // NON-BLOCKING kscanf - uses accumulator pattern for syscall safety
-// Returns: 0 if input not ready (would block), 1 if successful, -1 on error
+// Returns: 0 if input not ready (would block), 1 if successful, -1 on error/invalid input
 // When called from SVC handler, this function will NOT block indefinitely
 int kscanf_nonblocking(char *format, va_list list) {
   char *ptr = format;
@@ -410,6 +356,11 @@ int kscanf_nonblocking(char *format, va_list list) {
         break;
 
       case 'd':  // integer number
+        // Validate input first
+        if (!is_valid_int_str(input, 10)) {
+          reset_input_accumulator();
+          return -1;  // Invalid input
+        }
         *(uint32_t *)va_arg(list, uint32_t *) = __str_to_num(input, 10);
         break;
 
@@ -421,14 +372,29 @@ int kscanf_nonblocking(char *format, va_list list) {
         break;
 
       case 'x':  // hexadecimal number
+        // Validate input first
+        if (!is_valid_int_str(input, 16)) {
+          reset_input_accumulator();
+          return -1;  // Invalid input
+        }
         *(int *)va_arg(list, uint32_t *) = __str_to_num(input, 16);
         break;
 
       case 'o':  // octal number
+        // Validate input first
+        if (!is_valid_int_str(input, 8)) {
+          reset_input_accumulator();
+          return -1;  // Invalid input
+        }
         *(uint32_t *)va_arg(list, uint32_t *) = __str_to_num(input, 8);
         break;
 
       case 'f':  // floating point number
+        // Validate input first
+        if (!is_valid_float_str(input)) {
+          reset_input_accumulator();
+          return -1;  // Invalid input
+        }
         *(float *)va_arg(list, float *) = str2float(input);
         break;
 
@@ -444,21 +410,17 @@ int kscanf_nonblocking(char *format, va_list list) {
   return 1;  // Success
 }
 
-// NON-BLOCKING version of kscanf - returns IMMEDIATELY if no data ready
-// Safe to call from SVC handlers - will NOT block or starve interrupts
-// Returns: 1 if successful, 0 if would block (no complete input yet)
-// This is the main kscanf function that should be used everywhere
+
 int kscanf(char *format, ...) {
   va_list list;
   va_start(list, format);
 
-  // Call non-blocking variant ONCE - no retries in syscall handler!
   // This allows interrupts (UART TX, timers, etc.) to fire between syscalls
   // Application layer handles retries if needed
   int result = kscanf_nonblocking(format, list);
 
   va_end(list);
 
-  // Return 1 if successful, 0 if no complete input yet
-  return (result == 1) ? 1 : 0;
+  // Return 1 if successful, 0 if no complete input yet, -1 for invalid input
+  return result;
 }
