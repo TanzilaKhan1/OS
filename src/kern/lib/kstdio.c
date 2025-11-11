@@ -392,61 +392,98 @@ uint8_t* get_accumulated_input(void) {
   return g_input_accum.buffer;
 }
 
-// Simplified version of scanf - NOW USES NON-BLOCKING I/O
-// Safe to use from kernel code, polls internally until input complete
-// Simplified version of scanf
-void kscanf(char *format,...)
-{
-//write your code here
-	va_list list;
-	char *ptr;
-	uint8_t buff[50];
-	uint8_t *str;
-	int len;
-	ptr=format;
-	va_start(list,format);
-	while (*ptr)
-	{
-		if(*ptr == '%') //looking for format of an input
-		{
-			ptr++;
-			switch (*ptr)
-			{
-			case 'c': //character
-				// Use non-blocking poll to read one character
-				if (kscanf_poll_line(buff, 2) > 0) {
-					*(uint8_t*)va_arg(list,uint8_t*) = buff[0];
-				} else {
-					*(uint8_t*)va_arg(list,uint8_t*) = 0;
-				}
-				break;
-			case 'd': //integer number
-				kscanf_poll_line(buff, 50);  // Read input first!
-				*(uint32_t*)va_arg(list,uint32_t*)=__str_to_num(buff,10);
-				break;
-			case 's': //string without spaces
-				len = kscanf_poll_line(buff, 50);  // Read input first!
-				str = va_arg(list,uint8_t*);
-				for(int u = 0; u<=len; u++)	// copy from buff to user defined char pointer (i.e string)
-					str[u] = buff[u];
-				break;
-			case 'x': //hexadecimal number
-				kscanf_poll_line(buff, 50);  // Read input first!
-				*(int*)va_arg(list,uint32_t*)=__str_to_num(buff,16);
-				break;
-			case 'o': //octal number
-				kscanf_poll_line(buff, 50);  // Read input first!
-				*(uint32_t*)va_arg(list,uint32_t*)=__str_to_num(buff,8);
-				break;
-			case 'f': //floating point number
-				kscanf_poll_line(buff, 50);  // Read input first!
-				*(float*)va_arg(list,float*) = str2float(buff);	// Works for float but not for double !!!
-				break;
-			default: //rest not recognized
-				break;
-			}
-		}
-		ptr++;
-	}
-	va_end(list);
+// NON-BLOCKING kscanf - uses accumulator pattern for syscall safety
+// Returns: 0 if input not ready (would block), 1 if successful, -1 on error
+// When called from SVC handler, this function will NOT block indefinitely
+int kscanf_nonblocking(char *format, va_list list) {
+  char *ptr = format;
+
+  // First, try to accumulate a complete line of input (bounded operation)
+  int status = accumulate_input_line();
+
+  if (status == 0) {
+    // No complete line yet - return 0 (would block)
+    return 0;
+  }
+
+  if (status < 0) {
+    // Error
+    return -1;
+  }
+
+  // We have a complete line in the accumulator - parse it
+  uint8_t *input = get_accumulated_input();
+  uint8_t *str;
+  int len = __strlen(input);
+
+  while (*ptr) {
+    if (*ptr == '%') {  // looking for format of an input
+      ptr++;
+      switch (*ptr) {
+      case 'c':  // character
+        if (len > 0) {
+          *(uint8_t *)va_arg(list, uint8_t *) = input[0];
+        } else {
+          *(uint8_t *)va_arg(list, uint8_t *) = 0;
+        }
+        break;
+
+      case 'd':  // integer number
+        *(uint32_t *)va_arg(list, uint32_t *) = __str_to_num(input, 10);
+        break;
+
+      case 's':  // string without spaces
+        str = va_arg(list, uint8_t *);
+        for (int u = 0; u <= len; u++) {
+          str[u] = input[u];
+        }
+        break;
+
+      case 'x':  // hexadecimal number
+        *(int *)va_arg(list, uint32_t *) = __str_to_num(input, 16);
+        break;
+
+      case 'o':  // octal number
+        *(uint32_t *)va_arg(list, uint32_t *) = __str_to_num(input, 8);
+        break;
+
+      case 'f':  // floating point number
+        *(float *)va_arg(list, float *) = str2float(input);
+        break;
+
+      default:  // rest not recognized
+        break;
+      }
+    }
+    ptr++;
+  }
+
+  // Reset accumulator for next input
+  reset_input_accumulator();
+  return 1;  // Success
+}
+
+// NON-BLOCKING version of kscanf with BOUNDED retry attempts
+// Safe to call from SVC handlers - will NOT block indefinitely
+// Returns: number of items successfully read, or 0 if would block
+// This is the main kscanf function that should be used everywhere
+int kscanf(char *format, ...) {
+  va_list list;
+  va_start(list, format);
+
+  // Try to get input with BOUNDED retries (prevents indefinite blocking)
+  // This makes kscanf safe to use from syscall handlers
+  int result;
+  uint32_t max_retries = 1000U;  // Maximum retry attempts
+  uint32_t retry_count = 0U;
+
+  while ((result = kscanf_nonblocking(format, list)) == 0 && retry_count < max_retries) {
+    // Input not ready yet, retry with bounded limit
+    retry_count++;
+  }
+
+  va_end(list);
+
+  // Return 1 if successful, 0 if timed out (no complete input)
+  return (result == 1) ? 1 : 0;
 }

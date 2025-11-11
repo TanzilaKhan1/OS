@@ -30,13 +30,20 @@
 
 #ifndef __KSTDIO_H
 #define __KSTDIO_H
+#include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <types.h>
 
 void kprintf(char *, ...);
-void kscanf(char *, ...);
+// kscanf - NON-BLOCKING with bounded retries, safe for syscall use
+// Returns: 1 if successful, 0 if timed out/would block
+int kscanf(char *, ...);
 void putstr(const uint8_t *, size_t);
+
+// Internal non-blocking variant used by kscanf
+// Returns: 0 if would block, 1 if successful, -1 on error
+int kscanf_nonblocking(char *format, va_list list);
 
 // BLOCKING version - for direct kernel use (kscanf)
 // WARNING: DO NOT call from SVC handler - will block indefinitely!
