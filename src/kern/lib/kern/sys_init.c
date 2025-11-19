@@ -65,7 +65,7 @@ void __sys_init(void) {
   ConfigTimer2ForSystem();
   __ISB();
 #ifdef DEBUG
-  kprintf("\n************************************\r\n");
+  kprintf("\r\n************************************\r\n");
   kprintf("Booting Machine Intelligence System 1.0 .....\r\n");
   kprintf("Copyright (c) 2024, Prof. Mosaddek Tushar, CSE, DU\r\n");
   kprintf("CPUID %x\r\n", SCB->CPUID);
@@ -88,14 +88,9 @@ void SYS_ROUTINE(void) { __debugRamUsage(); }
  */
 void display_group_info(void) {
 
-  kprintf("Md Sadek Hossain Asif\n");
-  kprintf("Roll: 15\n");
-  kprintf("Tanzila Khan\n");
-  kprintf("Roll: 25\n");
+  kprintf("Md Sadek Hossain Asif\r\n");
+  kprintf("Roll: 15\r\n");
+  kprintf("Tanzila Khan\r\n");
+  kprintf("Roll: 25\r\n");
   kprintf("# ");
-
-  while (1) {
-    ms_delay(1);
-    kprintf("Time Elapse %d ms\n", __getTime());
-  }
 }

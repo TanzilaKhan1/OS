@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 void __sys_init(void);
+void display_group_info(void);
 
 #ifdef __cplusplus
 }

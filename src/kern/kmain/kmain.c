@@ -44,20 +44,36 @@ extern volatile uint16_t g_current_task_id;
 #define DEBUG 1
 #endif
 void kmain(void) {
-  __sys_init();
   g_current_task_id = 1000;
 
-  kprintf("Task ID set to: %d\r\n", g_current_task_id);
+  //   display_group_info();
 
+  kprintf("\r\n=== Privilege Mode Test ===\r\n");
+
+  uint32_t control = __get_CONTROL();
+  uint32_t is_priv = __is_privileged();
+  kprintf("CONTROL register: 0x%x\r\n", control);
+  kprintf("Privilege level: %s (bit 0 = %d)\r\n",
+          is_priv ? "PRIVILEGED" : "UNPRIVILEGED", control & 0x01);
+
+  kprintf("\r\nTask ID set to: %d\r\n", g_current_task_id);
+
+  kprintf(
+      "\r\nCalling syscalls (will enter privileged mode in handler)...\r\n");
   uint32_t t = getSysTickTime();
   int pid = getpid();
   kprintf("Current time: %d ms, pid: %d\r\n", t, pid);
+
+  control = __get_CONTROL();
+  is_priv = __is_privileged();
+  kprintf("After syscalls - Privilege: %s (CONTROL = 0x%x)\r\n",
+          is_priv ? "PRIVILEGED" : "UNPRIVILEGED", control);
 
   kprintf("\r\n=== Formatted I/O Test ===\r\n");
   kprintf("1. String  2. Integer  3. Float  4. Hex  5. Octal  6. Char\r\n");
   kprintf("Enter your choice: ");
   int choice = 0;
-  // Retry kscanf until data is available
+
   while (kscanf("%d", &choice) == 0) {
   }
   kprintf("\r\nYou entered (choice): %d", choice);
@@ -72,28 +88,34 @@ void kmain(void) {
   kprintf("\r\nEnter the value: ");
 
   switch (choice) {
-  case 1:  
-    while (kscanf("%s", str_buf) == 0);
+  case 1:
+    while (kscanf("%s", str_buf) == 0)
+      ;
     kprintf("\r\nYou entered (string): %s", str_buf);
     break;
-  case 2:  
-    while (kscanf("%d", &int_val) == 0);
+  case 2:
+    while (kscanf("%d", &int_val) == 0)
+      ;
     kprintf("\r\nYou entered (int): %d", int_val);
     break;
-  case 3:  
-    while (kscanf("%f", &float_val) == 0);
+  case 3:
+    while (kscanf("%f", &float_val) == 0)
+      ;
     kprintf("\r\nYou entered (float): %f", float_val);
     break;
-  case 4:  
-    while (kscanf("%x", &hex_val) == 0);
+  case 4:
+    while (kscanf("%x", &hex_val) == 0)
+      ;
     kprintf("\r\nYou entered (hex): 0x%x", hex_val);
     break;
-  case 5:  
-    while (kscanf("%o", &oct_val) == 0);
+  case 5:
+    while (kscanf("%o", &oct_val) == 0)
+      ;
     kprintf("\r\nYou entered (octal): %o", oct_val);
     break;
-  case 6:  
-    while (kscanf("%c", &char_val) == 0);
+  case 6:
+    while (kscanf("%c", &char_val) == 0)
+      ;
     kprintf("\r\nYou entered (char): %c", char_val);
     break;
   default:
@@ -105,7 +127,7 @@ void kmain(void) {
   uint32_t t2 = getSysTickTime();
   int pid2 = getpid();
 
-  kprintf("\n");
+  kprintf("\r\n");
   kprintf("\r\nSysTickTime: %u\r\n", t2);
   kprintf("pid: %d\r\n", pid2);
 

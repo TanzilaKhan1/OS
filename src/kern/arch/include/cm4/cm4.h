@@ -886,6 +886,46 @@ void SYS_SLEEP_WFI(void);
  * Functions on FPU
  **/
 void __enable_fpu(void);
+
+/**
+ * CONTROL Register Functions for Privilege Level Management
+ * CONTROL[0] (nPRIV): 0 = Privileged, 1 = Unprivileged (Thread mode only)
+ * CONTROL[1] (SPSEL): 0 = MSP, 1 = PSP
+ **/
+
+/* Get current CONTROL register value */
+static __inline uint32_t __get_CONTROL(void) {
+  uint32_t result;
+  __asm volatile("mrs %0, control" : "=r"(result));
+  return result;
+}
+
+/* Set CONTROL register value */
+static __inline void __set_CONTROL(uint32_t control) {
+  __asm volatile("msr control, %0" : : "r"(control) : "memory");
+  __ISB(); /* Instruction Synchronization Barrier - required after changing CONTROL */
+}
+
+/* Drop to unprivileged mode (Thread mode only) */
+static __inline void __set_unprivileged_mode(void) {
+  uint32_t control = __get_CONTROL();
+  control |= 0x01U; /* Set bit 0 (nPRIV) to 1 for unprivileged */
+  __set_CONTROL(control);
+}
+
+/* Return to privileged mode (can only be done from Handler mode or if already privileged) */
+static __inline void __set_privileged_mode(void) {
+  uint32_t control = __get_CONTROL();
+  control &= ~0x01U; /* Clear bit 0 (nPRIV) to 0 for privileged */
+  __set_CONTROL(control);
+}
+
+/* Check if currently in privileged mode */
+static __inline uint32_t __is_privileged(void) {
+  uint32_t control = __get_CONTROL();
+  return (control & 0x01U) == 0U; /* Returns 1 if privileged, 0 if unprivileged */
+}
+
 #ifdef __cplusplus
 }
 #endif

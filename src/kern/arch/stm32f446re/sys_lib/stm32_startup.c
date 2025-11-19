@@ -28,7 +28,9 @@
  * SUCH DAMAGE.
  */
 
+#include <cm4.h>
 #include <stm32_startup.h>
+#include <sys_init.h>
 const uint32_t STACK_START = (uint32_t)SRAM_END;
 uint32_t NVIC_VECTOR[] __attribute__((section(".isr_vector"))) = {
     STACK_START,
@@ -146,20 +148,36 @@ uint32_t NVIC_VECTOR[] __attribute__((section(".isr_vector"))) = {
     (uint32_t)&FMPI2C1_ERR_Handler};
 
 void Reset_Handler(void) {
+  /* Copy .data section from flash to SRAM */
   uint32_t size = (uint32_t)&_edata - (uint32_t)&_sdata;
   uint8_t *pDst = (uint8_t *)&_sdata;
   uint8_t *pSrc = (uint8_t *)&_la_data;
   for (uint32_t i = 0; i < size; i++) {
     *pDst++ = *pSrc++;
   }
+
+  /* Zero initialize .bss section */
   size = (uint32_t)&_ebss - (uint32_t)&_sbss;
   pDst = (uint8_t *)&_sbss;
   for (uint32_t i = 0; i < size; i++) {
     *pDst++ = 0;
   }
+
+  /* Store section sizes for debugging */
   _text_size = (uint32_t)&_etext - (uint32_t)&_stext;
   _data_size = (uint32_t)&_edata - (uint32_t)&_sdata;
   _bss_size = (uint32_t)&_ebss - (uint32_t)&_sbss;
+
+  /* Perform privileged hardware initialization before dropping privileges. */
+  __sys_init();
+
+  /*
+   * Drop to unprivileged mode before calling kmain
+   * This is a security measure - user code runs with restricted privileges
+   * Privileged operations must go through SVC handler
+   */
+  __set_unprivileged_mode();
+
   kmain();
 }
 void Default_Handler(void) {
@@ -190,25 +208,63 @@ extern uint32_t syscall_dispatch(uint16_t callno, uint32_t a0, uint32_t a1,
 
 void SVC_Handler_C(uint32_t *stack);
 
+/*
+ * SVCall_Handler - Supervisor Call Exception Handler
+ *
+ * This handler is invoked when user code executes the SVC instruction.
+ * The processor AUTOMATICALLY enters Handler Mode (privileged) when
+ * any exception occurs, regardless of the CONTROL register setting.
+ *
+ * Flow:
+ * 1. User code (unprivileged) executes: svc #N
+ * 2. Hardware automatically:
+ *    - Saves context (R0-R3, R12, LR, PC, xPSR) to stack
+ *    - Switches to Handler Mode (ALWAYS privileged)
+ *    - Loads PC with SVCall_Handler address from vector table
+ * 3. SVCall_Handler determines which stack pointer was used (MSP or PSP)
+ * 4. Calls SVC_Handler_C with pointer to saved context
+ * 5. SVC_Handler_C dispatches to appropriate syscall (runs privileged)
+ * 6. On return, hardware restores context and returns to Thread Mode
+ *    - Privilege level is determined by CONTROL register (unprivileged)
+ */
 __attribute__((naked)) void SVCall_Handler(void) {
-  __asm volatile("tst lr, #4\n"
-                 "ite eq\n"
-                 "mrseq r0, msp\n"
-                 "mrsne r0, psp\n"
-                 "b SVC_Handler_C");
+  __asm volatile("tst lr, #4\n"      /* Test bit 2 of LR (EXC_RETURN) */
+                 "ite eq\n"          /* If-Then-Else */
+                 "mrseq r0, msp\n"   /* If 0: using MSP, load MSP into R0 */
+                 "mrsne r0, psp\n"   /* If 1: using PSP, load PSP into R0 */
+                 "b SVC_Handler_C"); /* Branch to C handler with stack pointer in R0 */
 }
 
+/*
+ * SVC_Handler_C - C-level SVC handler (runs in PRIVILEGED mode)
+ *
+ * This function executes with full privileges and can access all
+ * system resources. It extracts the SVC number and arguments from
+ * the saved stack frame and dispatches to the appropriate syscall.
+ */
 void SVC_Handler_C(uint32_t *stack) {
+  /* Extract PC from saved context (stack[6]) */
   uint32_t pc = stack[6];
+
+  /* SVC instruction is 2 bytes, immediate value is in lower byte before PC */
   uint8_t svc_no = ((const uint8_t *)(pc - 2U))[0];
 
+  /* Extract arguments from saved R0-R3 */
   uint32_t a0 = stack[0];
   uint32_t a1 = stack[1];
   uint32_t a2 = stack[2];
   uint32_t a3 = stack[3];
 
+  /* Dispatch to syscall handler (runs with full privileges) */
   uint32_t rc = syscall_dispatch((uint16_t)svc_no, a0, a1, a2, a3);
+
+  /* Store return value in saved R0 (stack[0]) */
   stack[0] = rc;
+
+  /* When this function returns, hardware automatically:
+   * - Restores context from stack
+   * - Returns to Thread Mode with privilege determined by CONTROL register
+   */
 }
 
 __attribute__((naked)) void PendSV_Stub(void) { __asm volatile("bx lr"); }
