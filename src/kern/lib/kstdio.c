@@ -35,6 +35,7 @@
 #include <stdint.h>
 #include <sys_usart.h>
 #include <system_config.h>
+#include <unistd.h>
 
 /**
  * first argument define the type of string to kprintf and kscanf,
@@ -45,19 +46,35 @@
  * %o octal number
  * %f for floating point number
  */
-// Simplified version of printf
+// Helper function to append a character to buffer
+static void append_char(char *buf, uint32_t *pos, uint32_t max_size, char c) {
+  if (*pos < max_size - 1) {
+    buf[(*pos)++] = c;
+  }
+}
+
+// Helper function to append a string to buffer
+static void append_string(char *buf, uint32_t *pos, uint32_t max_size, const char *str) {
+  while (*str && *pos < max_size - 1) {
+    buf[(*pos)++] = *str++;
+  }
+}
+
+// Simplified version of printf - now calls write() syscall
 void kprintf(char *format, ...) {
-  // write your code here
+  static char output_buf[1024];  // Static buffer for output
+  uint32_t buf_pos = 0;
+
   char *tr;
   uint32_t i;
   uint8_t *str;
   va_list list;
   double dval;
-  // uint32_t *intval;
+
   va_start(list, format);
   for (tr = format; *tr != '\0'; tr++) {
     while (*tr != '%' && *tr != '\0') {
-      Uart_write(*tr, __CONSOLE);
+      append_char(output_buf, &buf_pos, sizeof(output_buf), *tr);
       tr++;
     }
     if (*tr == '\0')
@@ -66,56 +83,54 @@ void kprintf(char *format, ...) {
     switch (*tr) {
     case 'c':
       i = va_arg(list, int);
-      Uart_write(i, __CONSOLE);
+      append_char(output_buf, &buf_pos, sizeof(output_buf), (char)i);
       break;
     case 'd':
       i = va_arg(list, int);
       if (i < 0) {
-        Uart_write('-', __CONSOLE);
+        append_char(output_buf, &buf_pos, sizeof(output_buf), '-');
         i = -i;
       }
-      Uart_sendstring((char *)convert(i, 10), __CONSOLE);
+      append_string(output_buf, &buf_pos, sizeof(output_buf), (char *)convert(i, 10));
       break;
     case 'o':
       i = va_arg(list, int);
       if (i < 0) {
-        Uart_write('-', __CONSOLE);
+        append_char(output_buf, &buf_pos, sizeof(output_buf), '-');
         i = -i;
       }
-      Uart_sendstring((char *)convert(i, 8), __CONSOLE);
+      append_string(output_buf, &buf_pos, sizeof(output_buf), (char *)convert(i, 8));
       break;
     case 'x':
       i = va_arg(list, int);
-      /*if(i<0)
-      {
-              Uart_write('-',__CONSOLE);
-              i=-i;
-      }*/
-      Uart_sendstring((char *)convertu32(i, 16), __CONSOLE);
+      append_string(output_buf, &buf_pos, sizeof(output_buf), (char *)convertu32(i, 16));
       break;
     case 'u':
       i = va_arg(list, unsigned int);
-      Uart_sendstring((char *)convertu32(i, 10), __CONSOLE);
+      append_string(output_buf, &buf_pos, sizeof(output_buf), (char *)convertu32(i, 10));
       break;
     case 's':
       str = va_arg(list, uint8_t *);
-      Uart_sendstring((char *)str, __CONSOLE);
+      append_string(output_buf, &buf_pos, sizeof(output_buf), (char *)str);
       break;
     case 'f':
       dval = va_arg(list, double);
-      Uart_sendstring((char *)float2str(dval), __CONSOLE);
+      append_string(output_buf, &buf_pos, sizeof(output_buf), (char *)float2str(dval));
       break;
     default:
       break;
     }
   }
   va_end(list);
+
+  // Call write syscall with formatted output
+  if (buf_pos > 0) {
+    write(STDOUT_FILENO, output_buf, buf_pos, 0);
+  }
 }
 
 void putstr(const uint8_t *str, size_t size) {
-  for (uint32_t i = 0; i < size; i++) {
-    Uart_write(str[i], __CONSOLE);
-  }
+  write(STDOUT_FILENO, str, size, 0);
 }
 
 
@@ -124,53 +139,53 @@ void putstr(const uint8_t *str, size_t size) {
 // BLOCKING version
 // WARNING: DO NOT call from syscall handlers (SVC) 
 // Returns count of bytes read (excluding null terminator)
-uint32_t read_string_syscall(uint8_t *buff, size_t max_len) {
-  uint32_t count = 0U;
+// uint32_t read_string_syscall(uint8_t *buff, size_t max_len) {
+//   uint32_t count = 0U;
 
-  if (buff == 0 || max_len == 0U) {
-    return 0U;
-  }
+//   if (buff == 0 || max_len == 0U) {
+//     return 0U;
+//   }
 
-  while (count < (max_len - 1U)) {
-    // BLOCKING: wait for data
-    while (IsDataAvailable(__CONSOLE) <= 0);
+//   while (count < (max_len - 1U)) {
+//     // BLOCKING: wait for data
+//     while (IsDataAvailable(__CONSOLE) <= 0);
 
-    int c = Uart_read(__CONSOLE);
-    if (c < 0) {
-      continue;
-    }
+//     int c = Uart_read(__CONSOLE);
+//     if (c < 0) {
+//       continue;
+//     }
 
-    // Handle backspace/delete
-    if ((uint8_t)c == 0x08U || (uint8_t)c == 0x7FU) {
-      if (count > 0U) {
-        count--;
-        Uart_write('\b', __CONSOLE);
-        Uart_write(' ', __CONSOLE);
-        Uart_write('\b', __CONSOLE);
-      }
-      continue;
-    }
+//     // Handle backspace/delete
+//     if ((uint8_t)c == 0x08U || (uint8_t)c == 0x7FU) {
+//       if (count > 0U) {
+//         count--;
+//         Uart_write('\b', __CONSOLE);
+//         Uart_write(' ', __CONSOLE);
+//         Uart_write('\b', __CONSOLE);
+//       }
+//       continue;
+//     }
 
-    // Handle newline - end input
-    if ((uint8_t)c == '\n' || (uint8_t)c == '\r') {
-      Uart_write('\r', __CONSOLE);
-      Uart_write('\n', __CONSOLE);
-      break;
-    }
+//     // Handle newline - end input
+//     if ((uint8_t)c == '\n' || (uint8_t)c == '\r') {
+//       Uart_write('\r', __CONSOLE);
+//       Uart_write('\n', __CONSOLE);
+//       break;
+//     }
 
-    // Echo and store normal character
-    Uart_write((uint8_t)c, __CONSOLE);
-    buff[count++] = (uint8_t)c;
-  }
+//     // Echo and store normal character
+//     Uart_write((uint8_t)c, __CONSOLE);
+//     buff[count++] = (uint8_t)c;
+//   }
 
-  buff[count] = '\0';
-  return count;
-}
+//   buff[count] = '\0';
+//   return count;
+// }
 
 
 // Reads only available characters without waiting
 // Returns count of bytes read, or 0 if no data available
-uint32_t read_available_nonblocking(uint8_t *buff, size_t max_len) {
+uint32_t read_nonblocking(uint8_t *buff, size_t max_len) {
   uint32_t count = 0U;
 
   if (buff == 0 || max_len == 0U) {
@@ -241,50 +256,44 @@ int accumulate_input_line(void) {
     return 1;
   }
 
-  // Process ALL currently available characters (don't retry/wait)
-  uint32_t max_chars = 50U;  // Limit to prevent processing too much in one call
-  uint32_t chars_read = 0U;
+  // Read available input via syscall (non-blocking)
+  uint8_t temp_buf[64];  // Temporary buffer for this read
+  uint32_t available_space = sizeof(g_input_accum.buffer) - g_input_accum.count - 1U;
+  uint32_t read_size = (available_space < sizeof(temp_buf)) ? available_space : sizeof(temp_buf);
 
-  while (g_input_accum.count < sizeof(g_input_accum.buffer) - 1U &&
-         chars_read < max_chars) {
+  if (read_size == 0) {
+    // Buffer full - treat as complete
+    g_input_accum.buffer[g_input_accum.count] = '\0';
+    g_input_accum.line_complete = 1U;
+    return 1;
+  }
 
-    // Check if data available - if not, return immediately (no waiting!)
-    if (IsDataAvailable(__CONSOLE) <= 0) {
-      return 0;  // No more data available right now, return immediately
-    }
+  // Call read syscall to get available characters
+  int bytes_read = read(STDIN_FILENO, temp_buf, read_size, 0);
 
-    int c = Uart_read(__CONSOLE);
-    if (c < 0) {
-      // No data even though IsDataAvailable said there was - just return
-      return 0;
-    }
+  if (bytes_read <= 0) {
+    return 0;  // No data available yet
+  }
 
-    // Count characters read
-    chars_read++;
+  // Process each byte received
+  for (int i = 0; i < bytes_read; i++) {
+    uint8_t c = temp_buf[i];
 
     // Handle backspace
-    if ((uint8_t)c == 0x08U || (uint8_t)c == 0x7FU) {
+    if (c == 0x08U || c == 0x7FU) {
       if (g_input_accum.count > 0U) {
         g_input_accum.count--;
-        Uart_write('\b', __CONSOLE);
-        Uart_write(' ', __CONSOLE);
-        Uart_write('\b', __CONSOLE);
+        // Echo backspace
+        char bs_seq[] = "\b \b";
+        write(STDOUT_FILENO, bs_seq, 3, 0);
       }
       continue;
     }
 
     // Handle newline - line is complete!
-    if ((uint8_t)c == '\r' || (uint8_t)c == '\n') {
-      Uart_write('\r', __CONSOLE);
-      Uart_write('\n', __CONSOLE);
-
-      // Consume paired newline if available
-      if (IsDataAvailable(__CONSOLE) > 0) {
-        int next_c = Uart_peek(__CONSOLE);
-        if (next_c >= 0 && ((uint8_t)next_c == '\r' || (uint8_t)next_c == '\n')) {
-          Uart_read(__CONSOLE);
-        }
-      }
+    if (c == '\r' || c == '\n') {
+      // Echo newline
+      write(STDOUT_FILENO, "\r\n", 2, 0);
 
       // Mark line as complete
       g_input_accum.buffer[g_input_accum.count] = '\0';
@@ -293,15 +302,15 @@ int accumulate_input_line(void) {
     }
 
     // Echo and store normal character
-    Uart_write((uint8_t)c, __CONSOLE);
-    g_input_accum.buffer[g_input_accum.count++] = (uint8_t)c;
-  }
+    write(STDOUT_FILENO, &c, 1, 0);
+    g_input_accum.buffer[g_input_accum.count++] = c;
 
-  // Buffer full but no newline - treat as complete
-  if (g_input_accum.count >= sizeof(g_input_accum.buffer) - 1U) {
-    g_input_accum.buffer[g_input_accum.count] = '\0';
-    g_input_accum.line_complete = 1U;
-    return 1;
+    // Check if buffer is full
+    if (g_input_accum.count >= sizeof(g_input_accum.buffer) - 1U) {
+      g_input_accum.buffer[g_input_accum.count] = '\0';
+      g_input_accum.line_complete = 1U;
+      return 1;
+    }
   }
 
   return 0;  // Incomplete, need more data

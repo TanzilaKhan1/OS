@@ -51,122 +51,40 @@ uint32_t syscall_dispatch(uint16_t callno, uint32_t a0, uint32_t a1,
     uint32_t fd = a0;
     void *buf = (void *)a1;
     uint32_t len = a2;
-    uint32_t fmt = a3;  // Format type
 
     if (fd != STDIN_FILENO || buf == 0) {
       return 0U;
     }
 
-    // Use kscanf internally for formatted input
-    // kscanf is now non-blocking with bounded retries, safe for SVC context
-    int result;
-    uint32_t bytes_read = 0U;
-
-    switch (fmt) {
-    case FMT_STRING:  // String (%s)
-      result = kscanf("%s", (char *)buf);
-      if (result > 0) {
-        bytes_read = __strlen((uint8_t *)buf);
-      } else if (result < 0) {
-        kprintf("\r\nInvalid input! Please try again.\r\n");
-      }
-      return (result > 0) ? bytes_read : 0U;
-
-    case FMT_INT:  // Integer (%d)
-      result = kscanf("%d", (int *)buf);
-      if (result < 0) {
-        kprintf("\r\nInvalid input! Please enter a valid integer: ");
-      }
-      return (result > 0) ? sizeof(int) : 0U;
-
-    case FMT_FLOAT:  // Float (%f)
-      result = kscanf("%f", (float *)buf);
-      if (result < 0) {
-        kprintf("\r\nInvalid input! Please enter a valid float: ");
-      }
-      return (result > 0) ? sizeof(float) : 0U;
-
-    case FMT_HEX:  // Hexadecimal (%x)
-      result = kscanf("%x", (uint32_t *)buf);
-      if (result < 0) {
-        kprintf("\r\nInvalid input! Please enter a valid hexadecimal: ");
-      }
-      return (result > 0) ? sizeof(uint32_t) : 0U;
-
-    case FMT_OCTAL:  // Octal (%o)
-      result = kscanf("%o", (uint32_t *)buf);
-      if (result < 0) {
-        kprintf("\r\nInvalid input! Please enter a valid octal number: ");
-      }
-      return (result > 0) ? sizeof(uint32_t) : 0U;
-
-    case FMT_CHAR:  // Character (%c)
-      result = kscanf("%c", (char *)buf);
-      if (result < 0) {
-        kprintf("\r\nInvalid input!\r\n");
-      }
-      return (result > 0) ? sizeof(char) : 0U;
-
-    case FMT_RAW:  // Raw bytes (default, backward compatible)
-    default:
-      if (len == 0U) {
-        return 0U;
-      }
-      if (len > 256U) {
-        len = 256U;
-      }
-      // Use non-blocking version for raw I/O
-      uint32_t count = read_available_nonblocking((uint8_t *)buf, len);
-      
-      return count;
+    if (len == 0U) {
+      return 0U;
     }
+    if (len > 256U) {
+      len = 256U;
+    }
+
+    // Use non-blocking USART read
+    uint32_t count = read_nonblocking((uint8_t *)buf, len);
+    return count;
   }
   case SYS_write: {
     uint32_t fd = a0;
     const void *buf = (const void *)a1;
     uint32_t len = a2;
-    uint32_t fmt = a3;  // Format type
 
     if (fd != STDOUT_FILENO || buf == 0) {
       return 0U;
     }
 
-    // Formatted output using kprintf
-    switch (fmt) {
-    case FMT_STRING:  // String (%s)
-      kprintf("%s", (const char *)buf);
-      return __strlen((uint8_t *)buf);
-
-    case FMT_INT:  // Integer (%d)
-      kprintf("%d", *(const int *)buf);
-      return sizeof(int);
-
-    case FMT_FLOAT:  // Float (%f)
-      kprintf("%f", *(const float *)buf);
-      return sizeof(float);
-
-    case FMT_HEX:  // Hexadecimal (%x)
-      kprintf("%x", *(const uint32_t *)buf);
-      return sizeof(uint32_t);
-
-    case FMT_OCTAL:  // Octal (%o)
-      kprintf("%o", *(const uint32_t *)buf);
-      return sizeof(uint32_t);
-
-    case FMT_CHAR:  // Character (%c)
-      kprintf("%c", *(const char *)buf);
-      return sizeof(char);
-
-    case FMT_RAW:  // Raw bytes (default, backward compatible)
-    default:
-      if (len == 0U) {
-        return 0U;
-      }
-      for (uint32_t i = 0; i < len; i++) {
-        Uart_write(((const uint8_t *)buf)[i], __CONSOLE);
-      }
-      return len;
+    if (len == 0U) {
+      return 0U;
     }
+
+    // Use USART write for raw bytes
+    for (uint32_t i = 0; i < len; i++) {
+      Uart_write(((const uint8_t *)buf)[i], __CONSOLE);
+    }
+    return len;
   }
   case SYS_reboot:
     __NVIC_SystemReset();

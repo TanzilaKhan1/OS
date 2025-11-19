@@ -49,8 +49,7 @@ void kmain(void) {
 
   kprintf("Task ID set to: %d\r\n", g_current_task_id);
 
-  char msg[] = "Hello from userland via write()\r\n";
-  write(STDOUT_FILENO, msg, sizeof(msg) - 1U, FMT_RAW);
+  kprintf("Hello from userland via write()\r\n");
 
   uint32_t t = getSysTickTime();
   int pid = getpid();
@@ -63,14 +62,12 @@ void kmain(void) {
   kprintf("1. String  2. Integer  3. Float  4. Hex  5. Octal  6. Char\r\n");
   kprintf("Enter your choice: ");
   int choice = 0;
-  //kscanf("%d", &choice);
-  // Retry read until data is available (non-blocking I/O with application-level retry)
-  while (read(STDIN_FILENO, &choice, sizeof(choice), FMT_INT) == 0) {
+  // Retry kscanf until data is available (non-blocking I/O with application-level retry)
+  while (kscanf("%d", &choice) == 0) {
     // No data ready yet, retry
     // In a real system, this could yield to other tasks
   }
-  kprintf("\r\nYou entered (choice): ");
-  write(STDOUT_FILENO, &choice, 0, FMT_INT);
+  kprintf("\r\nYou entered (choice): %d", choice);
 
   // Variables to hold different types
   char str_buf[256];
@@ -81,38 +78,32 @@ void kmain(void) {
   char char_val;
 
   kprintf("\r\nEnter the value: ");
-  
-  // Read based on choice - syscall uses non-blocking I/O, so we retry here
+
+  // Read based on choice - kscanf uses non-blocking I/O, so we retry here
   switch (choice) {
   case 1:  // String
-    while (read(STDIN_FILENO, str_buf, sizeof(str_buf), FMT_STRING) == 0);
-    kprintf("\r\nYou entered (string): ");
-    write(STDOUT_FILENO, str_buf, 0, FMT_STRING);
+    while (kscanf("%s", str_buf) == 0);
+    kprintf("\r\nYou entered (string): %s", str_buf);
     break;
   case 2:  // Integer
-    while (read(STDIN_FILENO, &int_val, sizeof(int_val), FMT_INT) == 0);
-    kprintf("\r\nYou entered (int): ");
-    write(STDOUT_FILENO, &int_val, 0, FMT_INT);
+    while (kscanf("%d", &int_val) == 0);
+    kprintf("\r\nYou entered (int): %d", int_val);
     break;
   case 3:  // Float
-    while (read(STDIN_FILENO, &float_val, sizeof(float_val), FMT_FLOAT) == 0);
-    kprintf("\r\nYou entered (float): ");
-    write(STDOUT_FILENO, &float_val, 0, FMT_FLOAT);
+    while (kscanf("%f", &float_val) == 0);
+    kprintf("\r\nYou entered (float): %f", float_val);
     break;
   case 4:  // Hex
-    while (read(STDIN_FILENO, &hex_val, sizeof(hex_val), FMT_HEX) == 0);
-    kprintf("\r\nYou entered (hex): 0x");
-    write(STDOUT_FILENO, &hex_val, 0, FMT_HEX);
+    while (kscanf("%x", &hex_val) == 0);
+    kprintf("\r\nYou entered (hex): 0x%x", hex_val);
     break;
   case 5:  // Octal
-    while (read(STDIN_FILENO, &oct_val, sizeof(oct_val), FMT_OCTAL) == 0);
-    kprintf("\r\nYou entered (octal): ");
-    write(STDOUT_FILENO, &oct_val, 0, FMT_OCTAL);
+    while (kscanf("%o", &oct_val) == 0);
+    kprintf("\r\nYou entered (octal): %o", oct_val);
     break;
   case 6:  // Char
-    while (read(STDIN_FILENO, &char_val, sizeof(char_val), FMT_CHAR) == 0);
-    kprintf("\r\nYou entered (char): ");
-    write(STDOUT_FILENO, &char_val, 0, FMT_CHAR);
+    while (kscanf("%c", &char_val) == 0);
+    kprintf("\r\nYou entered (char): %c", char_val);
     break;
   default:
     kprintf("\r\nInvalid choice!");
@@ -124,15 +115,8 @@ void kmain(void) {
   int pid2 = getpid();
 
   kprintf("\n");
-  kprintf("\r\nSysTickTime: ");
-  uint8_t *t2_str = convertu32(t2, 10);
-  write(STDOUT_FILENO, t2_str, __strlen(t2_str), FMT_RAW);
-  write(STDOUT_FILENO, "\r\n", 2, FMT_RAW);
-
-  kprintf("pid: ");
-  uint8_t *pid2_str = convert(pid2, 10);
-  write(STDOUT_FILENO, pid2_str, __strlen(pid2_str), FMT_RAW);
-  write(STDOUT_FILENO, "\r\n", 2, FMT_RAW);
+  kprintf("\r\nSysTickTime: %u\r\n", t2);
+  kprintf("pid: %d\r\n", pid2);
 
   kprintf("\nCalling yield()...\r\n");
   yield();
