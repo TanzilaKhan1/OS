@@ -36,31 +36,13 @@
 #include <types.h>
 
 void kprintf(char *, ...);
-// kscanf - NON-BLOCKING with bounded retries, safe for syscall use
-// Returns: 1 if successful, 0 if timed out/would block
+// kscanf - NON-BLOCKING, safe for syscall use
+// Returns: 1 if successful, 0 if no complete input yet, -1 on error
 int kscanf(char *, ...);
 void putstr(const uint8_t *, size_t);
 
-// Internal non-blocking variant used by kscanf
-// Returns: 0 if would block, 1 if successful, -1 on error
-int kscanf_nonblocking(char *format, va_list list);
-
-// BLOCKING version - for direct kernel use (kscanf)
-// WARNING: DO NOT call from SVC handler - will block indefinitely!
-uint32_t read_string_syscall(uint8_t *buff, size_t max_len);
-
-// NON-BLOCKING version - for use in SYS_read syscall handler
-// Reads only available data, returns immediately if nothing available
-uint32_t read_available_nonblocking(uint8_t *buff, size_t max_len);
-
-// NON-BLOCKING input accumulator for formatted I/O
-// Returns: 0 = incomplete, 1 = complete line ready, -1 = error
-int accumulate_input_line(void);
-
-// Reset input accumulator (call after consuming input)
-void reset_input_accumulator(void);
-
-// Get pointer to accumulated input buffer
-uint8_t* get_accumulated_input(void);
+// NON-BLOCKING read function - for use in SYS_read syscall handler
+// Reads available data with echo, returns immediately if nothing available
+uint32_t read_nonblocking(uint8_t *buff, size_t max_len);
 
 #endif /* KSTDIO */

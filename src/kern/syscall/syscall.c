@@ -63,7 +63,6 @@ uint32_t syscall_dispatch(uint16_t callno, uint32_t a0, uint32_t a1,
       len = 256U;
     }
 
-    // Use non-blocking USART read
     uint32_t count = read_nonblocking((uint8_t *)buf, len);
     return count;
   }
@@ -80,7 +79,6 @@ uint32_t syscall_dispatch(uint16_t callno, uint32_t a0, uint32_t a1,
       return 0U;
     }
 
-    // Use USART write for raw bytes
     for (uint32_t i = 0; i < len; i++) {
       Uart_write(((const uint8_t *)buf)[i], __CONSOLE);
     }

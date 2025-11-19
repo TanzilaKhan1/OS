@@ -46,23 +46,23 @@
  * %o octal number
  * %f for floating point number
  */
-// Helper function to append a character to buffer
+
 static void append_char(char *buf, uint32_t *pos, uint32_t max_size, char c) {
   if (*pos < max_size - 1) {
     buf[(*pos)++] = c;
   }
 }
 
-// Helper function to append a string to buffer
+
 static void append_string(char *buf, uint32_t *pos, uint32_t max_size, const char *str) {
   while (*str && *pos < max_size - 1) {
     buf[(*pos)++] = *str++;
   }
 }
 
-// Simplified version of printf - now calls write() syscall
+
 void kprintf(char *format, ...) {
-  static char output_buf[1024];  // Static buffer for output
+  static char output_buf[1024];  
   uint32_t buf_pos = 0;
 
   char *tr;
@@ -123,7 +123,7 @@ void kprintf(char *format, ...) {
   }
   va_end(list);
 
-  // Call write syscall with formatted output
+
   if (buf_pos > 0) {
     write(STDOUT_FILENO, output_buf, buf_pos, 0);
   }
@@ -135,301 +135,159 @@ void putstr(const uint8_t *str, size_t size) {
 
 
 
-
-// BLOCKING version
-// WARNING: DO NOT call from syscall handlers (SVC) 
-// Returns count of bytes read (excluding null terminator)
-// uint32_t read_string_syscall(uint8_t *buff, size_t max_len) {
-//   uint32_t count = 0U;
-
-//   if (buff == 0 || max_len == 0U) {
-//     return 0U;
-//   }
-
-//   while (count < (max_len - 1U)) {
-//     // BLOCKING: wait for data
-//     while (IsDataAvailable(__CONSOLE) <= 0);
-
-//     int c = Uart_read(__CONSOLE);
-//     if (c < 0) {
-//       continue;
-//     }
-
-//     // Handle backspace/delete
-//     if ((uint8_t)c == 0x08U || (uint8_t)c == 0x7FU) {
-//       if (count > 0U) {
-//         count--;
-//         Uart_write('\b', __CONSOLE);
-//         Uart_write(' ', __CONSOLE);
-//         Uart_write('\b', __CONSOLE);
-//       }
-//       continue;
-//     }
-
-//     // Handle newline - end input
-//     if ((uint8_t)c == '\n' || (uint8_t)c == '\r') {
-//       Uart_write('\r', __CONSOLE);
-//       Uart_write('\n', __CONSOLE);
-//       break;
-//     }
-
-//     // Echo and store normal character
-//     Uart_write((uint8_t)c, __CONSOLE);
-//     buff[count++] = (uint8_t)c;
-//   }
-
-//   buff[count] = '\0';
-//   return count;
-// }
-
-
-// Reads only available characters without waiting
-// Returns count of bytes read, or 0 if no data available
+// Reads characters until newline or buffer full
+// Returns count of bytes read (0 if no complete line yet)
 uint32_t read_nonblocking(uint8_t *buff, size_t max_len) {
-  uint32_t count = 0U;
+  static uint8_t temp_buffer[256];
+  static uint32_t temp_count = 0;
 
   if (buff == 0 || max_len == 0U) {
     return 0U;
   }
 
-  // Cap at 256 bytes as per assignment requirements
   if (max_len > 256U) {
     max_len = 256U;
   }
 
-  // Read all available characters without blocking
-  while (count < (max_len - 1U)) {
-    // Check if data available - DON'T WAIT!
+
+  while (temp_count < sizeof(temp_buffer) - 1U) {
     if (IsDataAvailable(__CONSOLE) <= 0) {
-      break;  // No more data, return immediately
+      return 0;  
     }
 
     int c = Uart_read(__CONSOLE);
     if (c < 0) {
-      break;  // Error or no data, stop reading
+      return 0;  
     }
 
     // Handle backspace/delete
     if ((uint8_t)c == 0x08U || (uint8_t)c == 0x7FU) {
-      if (count > 0U) {
-        count--;  // Remove last character
+      if (temp_count > 0U) {
+        temp_count--;  
+        // Echo backspace sequence
+        Uart_write('\b', __CONSOLE);
+        Uart_write(' ', __CONSOLE);
+        Uart_write('\b', __CONSOLE);
       }
       continue;
     }
 
-    // Store character
-    buff[count++] = (uint8_t)c;
-
-    // Stop at newline
+    // Handle newline
     if ((uint8_t)c == '\n' || (uint8_t)c == '\r') {
-      break;
-    }
-  }
-
-  // Null terminate if there's room
-  if (count < max_len) {
-    buff[count] = '\0';
-  }
-
-  return count;
-}
-
-
-// Input accumulator state for non-blocking formatted input
-typedef struct {
-  uint8_t buffer[256];     // Accumulated input buffer
-  uint32_t count;          // Current position in buffer
-  uint8_t line_complete;   // Flag: 1 if newline received, 0 otherwise
-} input_accumulator_t;
-
-// Static accumulator for formatted input (one per system)
-static input_accumulator_t g_input_accum = {0};
-
-
-
-// NON-BLOCKING input accumulator - builds up a complete line over multiple calls
-// Returns: 0 = no complete line yet, 1 = line complete and ready, -1 = error
-// When returns 1, the complete line (without newline) is in the accumulator buffer
-int accumulate_input_line(void) {
-  // If we already have a complete line, return success immediately
-  if (g_input_accum.line_complete) {
-    return 1;
-  }
-
-  // Read available input via syscall (non-blocking)
-  uint8_t temp_buf[64];  // Temporary buffer for this read
-  uint32_t available_space = sizeof(g_input_accum.buffer) - g_input_accum.count - 1U;
-  uint32_t read_size = (available_space < sizeof(temp_buf)) ? available_space : sizeof(temp_buf);
-
-  if (read_size == 0) {
-    // Buffer full - treat as complete
-    g_input_accum.buffer[g_input_accum.count] = '\0';
-    g_input_accum.line_complete = 1U;
-    return 1;
-  }
-
-  // Call read syscall to get available characters
-  int bytes_read = read(STDIN_FILENO, temp_buf, read_size, 0);
-
-  if (bytes_read <= 0) {
-    return 0;  // No data available yet
-  }
-
-  // Process each byte received
-  for (int i = 0; i < bytes_read; i++) {
-    uint8_t c = temp_buf[i];
-
-    // Handle backspace
-    if (c == 0x08U || c == 0x7FU) {
-      if (g_input_accum.count > 0U) {
-        g_input_accum.count--;
-        // Echo backspace
-        char bs_seq[] = "\b \b";
-        write(STDOUT_FILENO, bs_seq, 3, 0);
-      }
-      continue;
-    }
-
-    // Handle newline - line is complete!
-    if (c == '\r' || c == '\n') {
       // Echo newline
-      write(STDOUT_FILENO, "\r\n", 2, 0);
+      Uart_write('\r', __CONSOLE);
+      Uart_write('\n', __CONSOLE);
 
-      // Mark line as complete
-      g_input_accum.buffer[g_input_accum.count] = '\0';
-      g_input_accum.line_complete = 1U;
-      return 1;  // Complete line ready
+      // Copy to output buffer and null terminate
+      uint32_t copy_len = (temp_count < max_len - 1) ? temp_count : (max_len - 1);
+      for (uint32_t i = 0; i < copy_len; i++) {
+        buff[i] = temp_buffer[i];
+      }
+      buff[copy_len] = '\0';
+
+      // Reset temp buffer for next read
+      uint32_t result = temp_count;
+      temp_count = 0;
+
+      return result;
     }
 
     // Echo and store normal character
-    write(STDOUT_FILENO, &c, 1, 0);
-    g_input_accum.buffer[g_input_accum.count++] = c;
-
-    // Check if buffer is full
-    if (g_input_accum.count >= sizeof(g_input_accum.buffer) - 1U) {
-      g_input_accum.buffer[g_input_accum.count] = '\0';
-      g_input_accum.line_complete = 1U;
-      return 1;
-    }
+    Uart_write((uint8_t)c, __CONSOLE);
+    temp_buffer[temp_count++] = (uint8_t)c;
   }
 
-  return 0;  // Incomplete, need more data
+  // Buffer full without newline
+  uint32_t copy_len = (temp_count < max_len - 1) ? temp_count : (max_len - 1);
+  for (uint32_t i = 0; i < copy_len; i++) {
+    buff[i] = temp_buffer[i];
+  }
+  buff[copy_len] = '\0';
+
+  uint32_t result = temp_count;
+  temp_count = 0;
+
+  return result;
 }
 
-// Reset the input accumulator (call after consuming accumulated input)
-void reset_input_accumulator(void) {
-  g_input_accum.count = 0U;
-  g_input_accum.line_complete = 0U;
-  g_input_accum.buffer[0] = '\0';
-}
 
-// Get pointer to accumulated input buffer (for parsing)
-uint8_t* get_accumulated_input(void) {
-  return g_input_accum.buffer;
-}
-
-// NON-BLOCKING kscanf - uses accumulator pattern for syscall safety
 // Returns: 0 if input not ready (would block), 1 if successful, -1 on error/invalid input
-// When called from SVC handler, this function will NOT block indefinitely
-int kscanf_nonblocking(char *format, va_list list) {
+int kscanf(char *format, ...) {
+  uint8_t input_buffer[256];
+
+  int bytes_read = read(STDIN_FILENO, input_buffer, sizeof(input_buffer), 0);
+
+  if (bytes_read <= 0) {
+    return 0;  
+  }
+
+  // input parse
+  va_list list;
+  va_start(list, format);
+
   char *ptr = format;
-
-  // First, try to accumulate a complete line of input (bounded operation)
-  int status = accumulate_input_line();
-
-  if (status == 0) {
-    // No complete line yet - return 0 (would block)
-    return 0;
-  }
-
-  if (status < 0) {
-    // Error
-    return -1;
-  }
-
-  // We have a complete line in the accumulator - parse it
-  uint8_t *input = get_accumulated_input();
   uint8_t *str;
-  int len = __strlen(input);
+  int len = __strlen(input_buffer);
 
   while (*ptr) {
-    if (*ptr == '%') {  // looking for format of an input
+    if (*ptr == '%') {  // format of an input
       ptr++;
       switch (*ptr) {
-      case 'c':  // character
+      case 'c':  
         if (len > 0) {
-          *(uint8_t *)va_arg(list, uint8_t *) = input[0];
+          *(uint8_t *)va_arg(list, uint8_t *) = input_buffer[0];
         } else {
           *(uint8_t *)va_arg(list, uint8_t *) = 0;
         }
         break;
 
-      case 'd':  // integer number
-        // Validate input first
-        if (!is_valid_int_str(input, 10)) {
-          reset_input_accumulator();
-          return -1;  // Invalid input
+      case 'd':  
+        if (!is_valid_int_str(input_buffer, 10)) {
+          va_end(list);
+          return -1;  
         }
-        *(uint32_t *)va_arg(list, uint32_t *) = __str_to_num(input, 10);
+        *(uint32_t *)va_arg(list, uint32_t *) = __str_to_num(input_buffer, 10);
         break;
 
-      case 's':  // string without spaces
+      case 's': 
         str = va_arg(list, uint8_t *);
         for (int u = 0; u <= len; u++) {
-          str[u] = input[u];
+          str[u] = input_buffer[u];
         }
         break;
 
-      case 'x':  // hexadecimal number
-        // Validate input first
-        if (!is_valid_int_str(input, 16)) {
-          reset_input_accumulator();
-          return -1;  // Invalid input
+      case 'x':  
+        if (!is_valid_int_str(input_buffer, 16)) {
+          va_end(list);
+          return -1; 
         }
-        *(int *)va_arg(list, uint32_t *) = __str_to_num(input, 16);
+        *(int *)va_arg(list, uint32_t *) = __str_to_num(input_buffer, 16);
         break;
 
-      case 'o':  // octal number
-        // Validate input first
-        if (!is_valid_int_str(input, 8)) {
-          reset_input_accumulator();
-          return -1;  // Invalid input
+      case 'o':  
+        if (!is_valid_int_str(input_buffer, 8)) {
+          va_end(list);
+          return -1;  
         }
-        *(uint32_t *)va_arg(list, uint32_t *) = __str_to_num(input, 8);
+        *(uint32_t *)va_arg(list, uint32_t *) = __str_to_num(input_buffer, 8);
         break;
 
-      case 'f':  // floating point number
-        // Validate input first
-        if (!is_valid_float_str(input)) {
-          reset_input_accumulator();
-          return -1;  // Invalid input
+      case 'f':  
+        if (!is_valid_float_str(input_buffer)) {
+          va_end(list);
+          return -1;  
         }
-        *(float *)va_arg(list, float *) = str2float(input);
+        *(float *)va_arg(list, float *) = str2float(input_buffer);
         break;
 
-      default:  // rest not recognized
+      default:  
         break;
       }
     }
     ptr++;
   }
 
-  // Reset accumulator for next input
-  reset_input_accumulator();
-  return 1;  // Success
-}
-
-
-int kscanf(char *format, ...) {
-  va_list list;
-  va_start(list, format);
-
-  // This allows interrupts (UART TX, timers, etc.) to fire between syscalls
-  // Application layer handles retries if needed
-  int result = kscanf_nonblocking(format, list);
-
   va_end(list);
 
-  // Return 1 if successful, 0 if no complete input yet, -1 for invalid input
-  return result;
+  return 1; 
 }
