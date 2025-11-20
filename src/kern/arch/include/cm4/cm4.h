@@ -863,6 +863,151 @@ __attribute__((__noreturn__)) static __inline void __NVIC_SystemReset(void) {
     __NOP();
   }
 }
+
+/* CONTROL Register Definitions */
+#define CONTROL_nPRIV_Pos 0U                       /*!< CONTROL: nPRIV Position */
+#define CONTROL_nPRIV_Msk (1UL << CONTROL_nPRIV_Pos) /*!< CONTROL: nPRIV Mask */
+
+#define CONTROL_SPSEL_Pos 1U                       /*!< CONTROL: SPSEL Position */
+#define CONTROL_SPSEL_Msk (1UL << CONTROL_SPSEL_Pos) /*!< CONTROL: SPSEL Mask */
+
+#define CONTROL_FPCA_Pos 2U                        /*!< CONTROL: FPCA Position */
+#define CONTROL_FPCA_Msk (1UL << CONTROL_FPCA_Pos) /*!< CONTROL: FPCA Mask */
+
+/* Privilege Mode Definitions */
+#define PRIV_MODE_PRIVILEGED   0U  /*!< Privileged execution mode */
+#define PRIV_MODE_UNPRIVILEGED 1U  /*!< Unprivileged execution mode */
+
+/* Stack Pointer Selection */
+#define STACK_POINTER_MSP 0U  /*!< Main Stack Pointer */
+#define STACK_POINTER_PSP 1U  /*!< Process Stack Pointer */
+
+/**
+ * @brief Get CONTROL register value
+ * @return Current CONTROL register value
+ */
+static __inline uint32_t __get_CONTROL(void) {
+  uint32_t result;
+  __asm volatile("MRS %0, CONTROL" : "=r"(result));
+  return result;
+}
+
+/**
+ * @brief Set CONTROL register value
+ * @param control Value to set in CONTROL register
+ */
+static __inline void __set_CONTROL(uint32_t control) {
+  __asm volatile("MSR CONTROL, %0" ::"r"(control) : "memory");
+  __ISB();
+}
+
+/**
+ * @brief Get current privilege mode
+ * @return 0 if privileged, 1 if unprivileged
+ */
+static __inline uint32_t __get_privilege_mode(void) {
+  return (__get_CONTROL() & CONTROL_nPRIV_Msk) >> CONTROL_nPRIV_Pos;
+}
+
+/**
+ * @brief Check if currently in privileged mode
+ * @return 1 if privileged, 0 if unprivileged
+ */
+static __inline uint32_t __is_privileged(void) {
+  return (__get_privilege_mode() == PRIV_MODE_PRIVILEGED) ? 1U : 0U;
+}
+
+/**
+ * @brief Check if currently in unprivileged mode
+ * @return 1 if unprivileged, 0 if privileged
+ */
+static __inline uint32_t __is_unprivileged(void) {
+  return (__get_privilege_mode() == PRIV_MODE_UNPRIVILEGED) ? 1U : 0U;
+}
+
+/**
+ * @brief Switch to unprivileged mode
+ * @note Cannot switch back to privileged mode from Thread mode
+ *       Must use exception return or system call to return to privileged mode
+ */
+static __inline void __set_unprivileged_mode(void) {
+  uint32_t control = __get_CONTROL();
+  control |= CONTROL_nPRIV_Msk;
+  __set_CONTROL(control);
+}
+
+/**
+ * @brief Switch to privileged mode
+ * @note This only works from Handler mode or if already in privileged Thread mode
+ *       Cannot elevate privileges from unprivileged Thread mode
+ */
+static __inline void __set_privileged_mode(void) {
+  uint32_t control = __get_CONTROL();
+  control &= ~CONTROL_nPRIV_Msk;
+  __set_CONTROL(control);
+}
+
+/**
+ * @brief Get current stack pointer selection
+ * @return 0 if using MSP, 1 if using PSP
+ */
+static __inline uint32_t __get_stack_pointer_selection(void) {
+  return (__get_CONTROL() & CONTROL_SPSEL_Msk) >> CONTROL_SPSEL_Pos;
+}
+
+/**
+ * @brief Set stack pointer to MSP (Main Stack Pointer)
+ */
+static __inline void __set_MSP_active(void) {
+  uint32_t control = __get_CONTROL();
+  control &= ~CONTROL_SPSEL_Msk;
+  __set_CONTROL(control);
+}
+
+/**
+ * @brief Set stack pointer to PSP (Process Stack Pointer)
+ */
+static __inline void __set_PSP_active(void) {
+  uint32_t control = __get_CONTROL();
+  control |= CONTROL_SPSEL_Msk;
+  __set_CONTROL(control);
+}
+
+/**
+ * @brief Get Main Stack Pointer (MSP) value
+ * @return Current MSP value
+ */
+static __inline uint32_t __get_MSP(void) {
+  uint32_t result;
+  __asm volatile("MRS %0, MSP" : "=r"(result));
+  return result;
+}
+
+/**
+ * @brief Set Main Stack Pointer (MSP) value
+ * @param topOfMainStack New MSP value
+ */
+static __inline void __set_MSP(uint32_t topOfMainStack) {
+  __asm volatile("MSR MSP, %0" ::"r"(topOfMainStack) : "memory");
+}
+
+/**
+ * @brief Get Process Stack Pointer (PSP) value
+ * @return Current PSP value
+ */
+static __inline uint32_t __get_PSP(void) {
+  uint32_t result;
+  __asm volatile("MRS %0, PSP" : "=r"(result));
+  return result;
+}
+
+/**
+ * @brief Set Process Stack Pointer (PSP) value
+ * @param topOfProcStack New PSP value
+ */
+static __inline void __set_PSP(uint32_t topOfProcStack) {
+  __asm volatile("MSR PSP, %0" ::"r"(topOfProcStack) : "memory");
+}
 /**
  * Function related to SysTick
  */
@@ -886,6 +1031,15 @@ void SYS_SLEEP_WFI(void);
  * Functions on FPU
  **/
 void __enable_fpu(void);
+
+/**
+ * Privilege Mode Management Functions
+ **/
+void __init_user_mode(uint32_t psp_top);
+uint32_t __get_execution_mode(uint32_t *mode_info);
+void __enter_kernel_mode(void);
+void __enter_user_mode(uint32_t user_sp);
+
 #ifdef __cplusplus
 }
 #endif
