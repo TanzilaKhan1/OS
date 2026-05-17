@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 
+ * Copyright (c) 2022
  * Computer Science and Engineering, University of Dhaka
  * Credit: CSE Batch 25 (starter) and Prof. Mosaddek Tushar
  *
@@ -27,9 +27,24 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
- 
+
 #ifndef __UNISTD_H
 #define __UNISTD_H
-/* Basic input and output function */
+#include <stddef.h>
+#include <stdint.h>
+
+#define STDIN_FILENO 0
+#define STDOUT_FILENO 1
+
+typedef int32_t ssize_t;
+
+ssize_t write(int fd, const void *buf, size_t count);
+ssize_t read(int fd, void *buf, size_t count);
+int reboot(void);
+int getpid(void);
+void _exit(int status);
+void exit(int status);
+int yield(void);
+uint32_t getSysTickTime(void);
 
 #endif

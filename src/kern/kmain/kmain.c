@@ -28,22 +28,95 @@
  * SUCH DAMAGE.
  */
 
-#include <sys_init.h>
 #include <cm4.h>
 #include <kmain.h>
-#include <stdint.h>
-#include <sys_usart.h>
 #include <kstdio.h>
-#include <sys_rtc.h>
 #include <kstring.h>
+#include <stdint.h>
+#include <sys_init.h>
+#include <sys_rtc.h>
+#include <sys_usart.h>
+#include <unistd.h>
+
+extern volatile uint16_t g_current_task_id;
+
 #ifndef DEBUG
 #define DEBUG 1
 #endif
-void kmain(void)
-{
-    __sys_init();
-    while (1)
-    {
-      
+void kmain(void) {
+  __sys_init();
+  g_current_task_id = 1000;
+
+  kprintf("Task ID set to: %d\r\n", g_current_task_id);
+
+  char msg[] = "Hello from userland via write()\r\n";
+  write(STDOUT_FILENO, msg, sizeof(msg) - 1U);
+
+  uint32_t t = getSysTickTime();
+  int pid = getpid();
+  // kprintf("getSysTickTime() returned: %d ms\r\n", t);
+  // kprintf("getpid() returned: %d\r\n", pid);
+  kprintf("Current time: %d ms, pid: %d\r\n", t, pid);
+  char msg2[1024];
+  kprintf("Enter text: ");
+  //kscanf("%s", msg2);
+  ssize_t len = 0;
+  ssize_t total = 0;
+  int got_eol = 0;
+  while (!got_eol) {
+    char chunk[64];
+    len = read(STDIN_FILENO, chunk, sizeof(chunk));
+    if (len > 0) {
+      for (ssize_t i = 0; i < len; i++) {
+        char c = chunk[i];
+        if (c == '\r' || c == '\n') {
+          write(STDOUT_FILENO, "\r\n", 2);
+          got_eol = 1;
+          break;
+        } else if ((uint8_t)c == 0x08U || (uint8_t)c == 0x7FU) {
+          if (total > 0) {
+            total--;
+            write(STDOUT_FILENO, "\b \b", 3);
+          }
+        } else {
+          if (total < (ssize_t)sizeof(msg2) - 1) {
+            msg2[total++] = c;
+            write(STDOUT_FILENO, &c, 1);
+          } else {
+            // buffer full: still allow editing/end but don't store further chars
+          }
+        }
+      }
+    } else {
+      // No data yet; yield CPU to avoid busy spin
+      yield();
     }
+  }
+  msg2[total] = '\0';
+  len = total;
+  kprintf("You entered: ");
+  write(STDOUT_FILENO, msg2, (size_t)len);
+
+  uint32_t t2 = getSysTickTime();
+  int pid2 = getpid();
+
+  kprintf("\n");
+  kprintf("\r\nSysTickTime: ");
+  uint8_t *t2_str = convertu32(t2, 10);
+  write(STDOUT_FILENO, t2_str, __strlen(t2_str));
+  write(STDOUT_FILENO, "\r\n", 2);
+
+  kprintf("pid: ");
+  uint8_t *pid2_str = convert(pid2, 10);
+  write(STDOUT_FILENO, pid2_str, __strlen(pid2_str));
+  write(STDOUT_FILENO, "\r\n", 2);
+
+  kprintf("\nCalling yield()...\r\n");
+  yield();
+
+  kprintf("After yield(), calling exit(0)...\r\n");
+  exit(0);
+
+  while (1) {
+  }
 }
